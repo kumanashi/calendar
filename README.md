@@ -43,3 +43,6 @@ Google OAuth Web Application 的 Authorized JavaScript origin 要設定為 GitHu
 ## 顏色資料
 
 排班顏色與類別會寫在 Google Calendar event 的 `extendedProperties.private` 中，因此本網站重新讀取事件時可還原顏色與收入用節費。
+
+## v4：收入設定跨裝置同步
+牌費、PPF、額外支援收入、健保費用不再只依賴單一瀏覽器。儲存時會在同一本 Google Calendar 建立一筆 `收入設定｜YYYY-MM` 的全天透明事件，數值放在事件的 private extended properties；網站同步時會讀回並隱藏這類事件，不會當成排班顯示。Google Calendar 本身仍會看得到該筆「收入設定」全天事件。

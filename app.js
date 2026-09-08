@@ -26,7 +26,9 @@ const state = {
   cursor: new Date(),
   tokenClient: null,
   googleToken: null,
-  pendingGoogleAction: null
+  pendingGoogleAction: null,
+  incomeSettings: {},
+  incomeEventIds: {}
 };
 
 function ymd(date) {
@@ -92,15 +94,52 @@ function showToast(message) {
 function openModal(id) { $(id).classList.remove('hidden'); }
 function closeModal(id) { $(id).classList.add('hidden'); }
 
+function emptyIncome() { return { license: 0, ppf: 0, support: 0, insurance: 0 }; }
 function getIncomeSettings(key = monthKey()) {
+  // Google Calendar is the cross-device source of truth. Local storage is only a fallback/cache.
+  if (state.incomeSettings[key]) return { ...emptyIncome(), ...state.incomeSettings[key] };
   try {
-    return { license: 0, ppf: 0, support: 0, insurance: 0, ...JSON.parse(localStorage.getItem(`roster_income_${key}`) || '{}') };
-  } catch {
-    return { license: 0, ppf: 0, support: 0, insurance: 0 };
-  }
+    return { ...emptyIncome(), ...JSON.parse(localStorage.getItem(`roster_income_${key}`) || '{}') };
+  } catch { return emptyIncome(); }
 }
-function setIncomeSettings(key, data) {
-  localStorage.setItem(`roster_income_${key}`, JSON.stringify(data));
+function cacheIncomeSettings(key, data) {
+  state.incomeSettings[key] = { ...emptyIncome(), ...data };
+  localStorage.setItem(`roster_income_${key}`, JSON.stringify(state.incomeSettings[key]));
+}
+function incomeEventToSettings(ev) {
+  const p = ev.extendedProperties?.private || {};
+  if (p.rosterMeta !== 'income' || !/^\d{4}-\d{2}$/.test(p.rosterMonth || '')) return null;
+  return {
+    key: p.rosterMonth, id: ev.id,
+    data: { license: toNum(p.rosterLicense), ppf: toNum(p.rosterPpf), support: toNum(p.rosterSupport), insurance: toNum(p.rosterInsurance) }
+  };
+}
+function incomeGooglePayload(key, data) {
+  const first = `${key}-01`;
+  const [y,m] = key.split('-').map(Number);
+  const next = m === 12 ? `${y+1}-01-01` : `${y}-${String(m+1).padStart(2,'0')}-01`;
+  return {
+    summary: `收入設定｜${key}`,
+    description: '由個人排班表自動建立，用於跨裝置同步每月收入設定。',
+    start: { date: first }, end: { date: next },
+    transparency: 'transparent',
+    extendedProperties: { private: {
+      rosterMeta: 'income', rosterMonth: key, rosterLicense: String(toNum(data.license)),
+      rosterPpf: String(toNum(data.ppf)), rosterSupport: String(toNum(data.support)),
+      rosterInsurance: String(toNum(data.insurance)), rosterApp: 'github-pages-roster-v4'
+    }}
+  };
+}
+async function saveIncomeSettingsToGoogle(key, data) {
+  const calendarId = getCalendarId();
+  if (!calendarId) throw new Error('請先設定排班 Calendar ID');
+  const id = state.incomeEventIds[key];
+  const path = id
+    ? `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(id)}`
+    : `/calendars/${encodeURIComponent(calendarId)}/events`;
+  const saved = await googleFetch(path, { method: id ? 'PATCH' : 'POST', body: JSON.stringify(incomeGooglePayload(key, data)) });
+  if (saved?.id) state.incomeEventIds[key] = saved.id;
+  cacheIncomeSettings(key, data);
 }
 
 function renderToday() {
@@ -395,6 +434,16 @@ async function fetchAllEvents() {
     all.push(...(data.items || []));
     pageToken = data.nextPageToken || '';
   } while (pageToken);
+  state.incomeSettings = {};
+  state.incomeEventIds = {};
+  all.forEach(ev => {
+    const income = incomeEventToSettings(ev);
+    if (income) {
+      state.incomeSettings[income.key] = income.data;
+      state.incomeEventIds[income.key] = income.id;
+      localStorage.setItem(`roster_income_${income.key}`, JSON.stringify(income.data));
+    }
+  });
   state.shifts = all.map(googleEventToShift).filter(Boolean).sort((a,b) => `${a.date}T${a.start}`.localeCompare(`${b.date}T${b.start}`));
   saveCache();
   renderAll();
@@ -544,15 +593,18 @@ $('bulkForm').addEventListener('submit', (e) => {
 $('incomeForm').addEventListener('submit', (e) => {
   e.preventDefault();
   const key = monthKey();
-  setIncomeSettings(key, {
+  const data = {
     license: toNum($('licenseFeeInput').value),
     ppf: toNum($('ppfInput').value),
     support: toNum($('supportIncomeInput').value),
     insurance: toNum($('insuranceCostInput').value)
+  };
+  withGoogleAccess(async () => {
+    await saveIncomeSettingsToGoogle(key, data);
+    closeModal('incomeModal');
+    renderIncome();
+    showToast(`${key} 收入設定已同步到 Google Calendar`);
   });
-  closeModal('incomeModal');
-  renderIncome();
-  showToast(`${key} 收入設定已儲存`);
 });
 
 $('prevMonth').onclick = () => {
