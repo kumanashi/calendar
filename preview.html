@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f3f3f1" />
+  <meta name="description" content="個人排班日曆：GitHub Pages + Google Calendar 同步" />
+  <title>個人排班表</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">MY ROSTER</p>
+        <h1>個人排班表</h1>
+        <p class="subtle">排班、同步與每月收入預估</p>
+      </div>
+      <div class="top-actions">
+        <button class="btn ghost" id="settingsBtn" type="button">同步設定</button>
+        <button class="btn ghost" id="bulkShiftBtn" type="button">＋ 固定排班</button>
+        <button class="btn dark" id="addShiftBtn" type="button">＋ 單次排班</button>
+      </div>
+    </header>
+
+    <main class="stack">
+      <section class="card today-card">
+        <div class="section-heading wrap">
+          <div>
+            <p class="eyebrow">TODAY</p>
+            <h2 id="todayTitle">今天</h2>
+          </div>
+          <span class="count-pill" id="todayCount">0 班</span>
+        </div>
+        <div id="todayShifts" class="today-list"></div>
+      </section>
+
+      <section class="card income-card">
+        <div class="section-heading wrap">
+          <div>
+            <p class="eyebrow">ESTIMATED INCOME</p>
+            <h2 id="incomeTitle">本月預估收入</h2>
+          </div>
+          <button class="btn ghost compact" id="incomeSettingsBtn" type="button">設定本月收入項目</button>
+        </div>
+        <div class="income-summary">
+          <div class="income-main">
+            <span>預估收入</span>
+            <strong id="incomeTotal">NT$ 0</strong>
+            <small id="incomeFormula">牌費 + 節費 + PPF + 支援 - 健保</small>
+          </div>
+          <div class="income-breakdown">
+            <div><span>牌費</span><strong id="incomeLicense">NT$ 0</strong></div>
+            <div><span>本月節費</span><strong id="incomeShiftFees">NT$ 0</strong></div>
+            <div><span>PPF</span><strong id="incomePpf">NT$ 0</strong></div>
+            <div><span>額外支援</span><strong id="incomeSupport">NT$ 0</strong></div>
+            <div><span>健保費用</span><strong id="incomeInsurance">− NT$ 0</strong></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card calendar-panel">
+        <div class="calendar-toolbar">
+          <div class="calendar-nav">
+            <button class="icon-btn" id="prevMonth" type="button" aria-label="上個月">‹</button>
+            <button class="btn ghost compact" id="todayBtn" type="button">今天</button>
+            <button class="icon-btn" id="nextMonth" type="button" aria-label="下個月">›</button>
+          </div>
+          <h2 id="monthTitle">----</h2>
+          <div class="toolbar-right">
+            <button class="btn ghost compact" id="refreshBtn" type="button">重新整理 Google</button>
+          </div>
+        </div>
+        <div class="weekday-row">
+          <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+        </div>
+        <div id="calendarGrid" class="calendar-grid"></div>
+      </section>
+
+      <section class="card sync-strip">
+        <div>
+          <strong>Google / Apple Calendar</strong>
+          <p id="syncStatus">尚未連線 Google Calendar</p>
+        </div>
+        <div class="sync-actions">
+          <button class="btn ghost" id="googleSyncBtn" type="button">連線 Google Calendar</button>
+          <button class="btn ghost" id="appleSubscribeBtn" type="button">訂閱 Apple Calendar</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop hidden" id="shiftModal">
+    <form class="modal" id="shiftForm">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">SINGLE SHIFT</p>
+          <h2 id="shiftModalTitle">新增單次排班</h2>
+        </div>
+        <button class="icon-btn" type="button" data-close="shiftModal">×</button>
+      </div>
+      <input type="hidden" id="shiftId" />
+      <div class="form-grid">
+        <label class="full">班別名稱
+          <input id="titleInput" required placeholder="例如：愛林診所 晚診" />
+        </label>
+        <label class="full">地點 / 診所
+          <input id="locationInput" placeholder="例如：愛林診所" />
+        </label>
+        <label>日期
+          <input id="dateInput" type="date" required />
+        </label>
+        <label>類型
+          <select id="typeInput">
+            <option value="clinic">門診</option>
+            <option value="holiday">假日班</option>
+            <option value="other">其他</option>
+            <option value="leave">休假</option>
+          </select>
+        </label>
+        <label>開始時間
+          <input id="startInput" type="time" required value="09:00" />
+        </label>
+        <label>結束時間
+          <input id="endInput" type="time" required value="12:00" />
+        </label>
+        <label>本節節費（元）
+          <input id="feeInput" type="number" min="0" step="1" inputmode="numeric" placeholder="例如 6500" />
+        </label>
+        <label>診別
+          <input id="sessionInput" placeholder="例如 早診 / 午診 / 晚診" />
+        </label>
+        <label class="full">備註
+          <textarea id="noteInput" rows="3" placeholder="代班、診間、特殊事項…"></textarea>
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button class="btn danger hidden" id="deleteShiftBtn" type="button">刪除</button>
+        <div class="spacer"></div>
+        <button class="btn ghost" type="button" data-close="shiftModal">取消</button>
+        <button class="btn dark" type="submit">儲存班表</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="modal-backdrop hidden" id="bulkModal">
+    <form class="modal wide" id="bulkForm">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">RECURRING SHIFTS</p>
+          <h2>新增固定排班</h2>
+          <p class="modal-lead">一次建立每週固定班，可快速排 1 個月、2 個月或更長期間。</p>
+        </div>
+        <button class="icon-btn" type="button" data-close="bulkModal">×</button>
+      </div>
+      <div class="form-grid">
+        <label class="full">班別名稱
+          <input id="bulkTitleInput" required placeholder="例如：愛林診所 晚診" />
+        </label>
+        <label>地點 / 診所
+          <input id="bulkLocationInput" placeholder="例如：愛林診所" />
+        </label>
+        <label>診別
+          <input id="bulkSessionInput" placeholder="例如：晚診" />
+        </label>
+        <label>開始時間
+          <input id="bulkStartInput" type="time" required value="18:00" />
+        </label>
+        <label>結束時間
+          <input id="bulkEndInput" type="time" required value="21:00" />
+        </label>
+        <label>每節節費（元）
+          <input id="bulkFeeInput" type="number" min="0" step="1" inputmode="numeric" placeholder="例如 6500" />
+        </label>
+        <label>類型
+          <select id="bulkTypeInput">
+            <option value="clinic">門診</option>
+            <option value="holiday">假日班</option>
+            <option value="other">其他</option>
+          </select>
+        </label>
+        <fieldset class="full weekday-picker">
+          <legend>每週固定星期</legend>
+          <div class="weekday-checks">
+            <label><input type="checkbox" name="bulkWeekday" value="1" />一</label>
+            <label><input type="checkbox" name="bulkWeekday" value="2" />二</label>
+            <label><input type="checkbox" name="bulkWeekday" value="3" />三</label>
+            <label><input type="checkbox" name="bulkWeekday" value="4" />四</label>
+            <label><input type="checkbox" name="bulkWeekday" value="5" />五</label>
+            <label><input type="checkbox" name="bulkWeekday" value="6" />六</label>
+            <label><input type="checkbox" name="bulkWeekday" value="0" />日</label>
+          </div>
+        </fieldset>
+        <label>排班期間
+          <select id="bulkRangePreset">
+            <option value="1">1 個月</option>
+            <option value="2" selected>2 個月</option>
+            <option value="6">6 個月</option>
+            <option value="12">長期（12 個月）</option>
+            <option value="custom">自訂日期</option>
+          </select>
+        </label>
+        <label>開始日期
+          <input id="bulkFromInput" type="date" required />
+        </label>
+        <label id="bulkToLabel" class="hidden">結束日期
+          <input id="bulkToInput" type="date" />
+        </label>
+        <label class="full">備註
+          <textarea id="bulkNoteInput" rows="2" placeholder="這一批固定排班共用的備註…"></textarea>
+        </label>
+      </div>
+      <div class="bulk-preview" id="bulkPreview">請選擇星期與期間。</div>
+      <div class="modal-actions">
+        <div class="spacer"></div>
+        <button class="btn ghost" type="button" data-close="bulkModal">取消</button>
+        <button class="btn dark" id="bulkSubmitBtn" type="submit">建立固定排班</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="modal-backdrop hidden" id="incomeModal">
+    <form class="modal" id="incomeForm">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">MONTHLY INCOME</p>
+          <h2 id="incomeModalTitle">本月收入設定</h2>
+          <p class="modal-lead">節費由當月排班自動加總；其餘項目每月設定一次。</p>
+        </div>
+        <button class="icon-btn" type="button" data-close="incomeModal">×</button>
+      </div>
+      <div class="form-grid">
+        <label>牌費（元）
+          <input id="licenseFeeInput" type="number" min="0" step="1" inputmode="numeric" />
+        </label>
+        <label>PPF（元）
+          <input id="ppfInput" type="number" min="0" step="1" inputmode="numeric" />
+        </label>
+        <label>額外支援收入（元）
+          <input id="supportIncomeInput" type="number" min="0" step="1" inputmode="numeric" />
+        </label>
+        <label>健保費用（元）
+          <input id="insuranceCostInput" type="number" min="0" step="1" inputmode="numeric" />
+        </label>
+      </div>
+      <div class="income-equation" id="incomeEquation"></div>
+      <p class="hint">這四個月度欄位目前儲存在此瀏覽器；排班與每節節費則跟著 Google Calendar 同步。</p>
+      <div class="modal-actions">
+        <div class="spacer"></div>
+        <button class="btn ghost" type="button" data-close="incomeModal">取消</button>
+        <button class="btn dark" type="submit">儲存本月設定</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="modal-backdrop hidden" id="settingsModal">
+    <div class="modal settings-modal">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">SYNC</p>
+          <h2>Google / Apple 同步設定</h2>
+        </div>
+        <button class="icon-btn" type="button" data-close="settingsModal">×</button>
+      </div>
+      <div class="settings-section">
+        <h3>Google Calendar</h3>
+        <p>建議建立一個獨立的「排班」日曆，只讓這個網頁讀寫該日曆。</p>
+        <label>Google OAuth Client ID
+          <input id="googleClientId" placeholder="xxxxxxxx.apps.googleusercontent.com" />
+        </label>
+        <label>排班 Calendar ID
+          <input id="googleCalendarId" placeholder="例如 abc123@group.calendar.google.com" />
+        </label>
+      </div>
+      <div class="settings-section">
+        <h3>Apple Calendar</h3>
+        <p>貼上 Google 排班日曆的 Secret address in iCal format。網址只存在你的瀏覽器，請勿提交到 GitHub。</p>
+        <label>Secret iCal URL
+          <input id="appleIcsUrl" type="password" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics" />
+        </label>
+      </div>
+      <div class="modal-actions">
+        <div class="spacer"></div>
+        <button class="btn dark" id="saveSettingsBtn" type="button">儲存設定</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast hidden" id="toast"></div>
+  <script>
+localStorage.setItem('roster_cache_unset', JSON.stringify([
+{id:'d1',title:'愛林診所 早診',location:'愛林診所',date:'2026-09-08',start:'09:00',end:'12:00',type:'clinic',fee:6500,session:'早診',note:''},
+{id:'d2',title:'愛林診所 晚診',location:'愛林診所',date:'2026-09-08',start:'18:00',end:'21:00',type:'clinic',fee:7200,session:'晚診',note:''},
+{id:'d3',title:'愛林診所 午診',location:'愛林診所',date:'2026-09-10',start:'14:00',end:'17:00',type:'clinic',fee:6500,session:'午診',note:''},
+{id:'d4',title:'週六支援診',location:'支援診所',date:'2026-09-12',start:'09:00',end:'12:30',type:'other',fee:8500,session:'早診',note:''},
+{id:'d5',title:'愛林診所 晚診',location:'愛林診所',date:'2026-09-15',start:'18:00',end:'21:00',type:'clinic',fee:7200,session:'晚診',note:''},
+{id:'d6',title:'愛林診所 午診',location:'愛林診所',date:'2026-09-17',start:'14:00',end:'17:00',type:'clinic',fee:6500,session:'午診',note:''},
+{id:'d7',title:'愛林診所 晚診',location:'愛林診所',date:'2026-09-22',start:'18:00',end:'21:00',type:'clinic',fee:7200,session:'晚診',note:''},
+{id:'d8',title:'愛林診所 午診',location:'愛林診所',date:'2026-09-24',start:'14:00',end:'17:00',type:'clinic',fee:6500,session:'午診',note:''},
+{id:'d9',title:'假日支援',location:'支援診所',date:'2026-09-27',start:'09:00',end:'13:00',type:'holiday',fee:9000,session:'早診',note:''},
+{id:'d10',title:'愛林診所 晚診',location:'愛林診所',date:'2026-09-29',start:'18:00',end:'21:00',type:'clinic',fee:7200,session:'晚診',note:''}
+]));
+localStorage.setItem('roster_income_2026-09', JSON.stringify({license:30000,ppf:12000,support:8000,insurance:3500}));
+</script>
+<script src="./app.js"></script>
+</body>
+</html>
