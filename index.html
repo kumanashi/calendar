@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#f3f3f1" />
-  <meta name="description" content="個人排班日曆 v4.4：GitHub Pages + Google Calendar + Drive App Data 同步" />
+  <meta name="description" content="個人排班日曆：GitHub Pages + Google Calendar + Drive App Data 同步" />
   <title>個人排班表</title>
   <link rel="stylesheet" href="./styles.css" />
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -13,8 +13,7 @@
   <div class="app-shell">
     <header class="topbar">
       <div>
-        <p class="eyebrow">MY ROSTER</p>
-        <h1>個人排班表</h1>
+<div class="title-row"><h1>個人排班表</h1><span class="version-badge">v4.5</span></div>
         <p class="subtle">排班、同步與每月收入預估</p>
       </div>
 
@@ -90,6 +89,7 @@
   <div class="floating-actions" aria-label="排班快捷操作">
     <button class="fab" id="addShiftBtn" type="button" title="新增單次排班">＋ 單次</button>
     <button class="fab" id="bulkShiftBtn" type="button" title="新增固定排班">↻ 固定</button>
+    <button class="fab" id="batchDeleteBtn" type="button" title="批次刪除">☑ 批次刪除</button>
     <button class="fab" id="settingsBtn" type="button" title="同步設定">⚙ 同步</button>
   </div>
 

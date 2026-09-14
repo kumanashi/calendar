@@ -24,6 +24,8 @@ const state = {
   cloudConfig: null,
   driveStatus: 'idle',
   driveLastError: '',
+  batchDeleteMode: false,
+  selectedShiftIds: new Set(),
   typeColors: { ...DEFAULT_TYPE_COLORS }
 };
 
@@ -193,6 +195,109 @@ function renderIncome() {
   $('incomeInsurance').textContent = `− ${money(settings.insurance)}`;
   $('incomeFormula').textContent = `${money(settings.license)} + ${money(shiftFees)} + ${money(shiftPpf)} + ${money(settings.support)} − ${money(settings.insurance)}`;
 }
+
+
+function decorateCalendarForBatchDelete() {
+  if (!state.batchDeleteMode) return;
+  document.querySelectorAll('[data-shift-id]').forEach(el => {
+    const id = el.dataset.shiftId;
+    if (!id || el.querySelector('.batch-check')) return;
+    const check = document.createElement('label');
+    check.className = 'batch-check';
+    check.innerHTML = `<input class="batch-select-checkbox" type="checkbox" ${state.selectedShiftIds.has(id) ? 'checked' : ''}><span></span>`;
+    check.addEventListener('click', ev => ev.stopPropagation());
+    const input = check.querySelector('input');
+    input.addEventListener('change', ev => {
+      ev.stopPropagation();
+      toggleShiftSelection(id, ev.target.checked);
+    });
+    el.prepend(check);
+  });
+}
+
+function updateBatchDeleteButton() {
+  const btn = $('batchDeleteBtn');
+  if (!btn) return;
+  const count = state.selectedShiftIds.size;
+  if (!state.batchDeleteMode) {
+    btn.textContent = '☑ 批次刪除';
+    btn.classList.remove('danger');
+    btn.title = '批次刪除';
+    return;
+  }
+  btn.classList.add('danger');
+  btn.textContent = count > 0 ? `刪除已選 (${count})` : '取消批次刪除';
+  btn.title = count > 0 ? `刪除 ${count} 筆事件` : '離開批次刪除模式';
+}
+
+function setBatchDeleteMode(enabled) {
+  state.batchDeleteMode = !!enabled;
+  if (!enabled) state.selectedShiftIds.clear();
+  document.body.classList.toggle('batch-delete-mode', state.batchDeleteMode);
+  updateBatchDeleteButton();
+  renderCalendar();
+  wireDynamic();
+}
+
+function toggleShiftSelection(id, checked) {
+  if (checked) state.selectedShiftIds.add(id);
+  else state.selectedShiftIds.delete(id);
+  updateBatchDeleteButton();
+}
+
+function deleteSelectedShifts() {
+  const ids = [...state.selectedShiftIds];
+  if (!ids.length) {
+    setBatchDeleteMode(false);
+    return;
+  }
+
+  const shifts = state.shifts.filter(s => ids.includes(s.id));
+  if (!shifts.length) {
+    setBatchDeleteMode(false);
+    return;
+  }
+
+  if (!confirm(`確定要刪除已選取的 ${shifts.length} 筆排班嗎？此動作會同步刪除 Google Calendar 事件。`)) return;
+
+  const btn = $('batchDeleteBtn');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = `刪除中 0/${shifts.length}`;
+  }
+
+  withGoogleAccess(async () => {
+    try {
+      await tryLoadAppDataConfig();
+      const cal = getCalendarId();
+      if (!cal) throw new Error('請先在同步設定輸入排班 Calendar ID');
+
+      let done = 0;
+      for (const shift of shifts) {
+        await calendarRequest(`/calendars/${encodeURIComponent(cal)}/events/${encodeURIComponent(shift.id)}`, {
+          method: 'DELETE'
+        });
+        done += 1;
+        if (btn) btn.textContent = `刪除中 ${done}/${shifts.length}`;
+      }
+
+      state.shifts = state.shifts.filter(s => !ids.includes(s.id));
+      saveShiftCache();
+      state.selectedShiftIds.clear();
+      state.batchDeleteMode = false;
+      document.body.classList.remove('batch-delete-mode');
+      renderAll();
+      updateBatchDeleteButton();
+      showToast(`已刪除 ${shifts.length} 筆排班`);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        updateBatchDeleteButton();
+      }
+    }
+  });
+}
+
 function renderCalendar() {
   const y = state.cursor.getFullYear(), m = state.cursor.getMonth();
   $('monthTitle').textContent = `${y} 年 ${m+1} 月`;
@@ -202,19 +307,39 @@ function renderCalendar() {
     const d=new Date(start); d.setDate(start.getDate()+i);
     const dateStr=ymd(d);
     const dayShifts=state.shifts.filter(s=>s.date===dateStr).sort((a,b)=>a.start.localeCompare(b.start));
-    const shown=dayShifts.slice(0,3), outside=d.getMonth()!==m;
+    const shown=state.batchDeleteMode ? dayShifts : dayShifts.slice(0,3), outside=d.getMonth()!==m;
     cells.push(`<div class="day-cell ${outside?'outside':''} ${dateStr===today?'today':''}">
       <div class="day-head"><span class="day-number">${d.getDate()}</span><button class="day-add" data-add-date="${dateStr}" type="button" aria-label="新增班別">＋</button></div>
-      ${shown.map(s=>`<button class="event-chip" data-edit="${s.id}" type="button" style="--marker:${shiftColor(s)}"><strong><i class="chip-dot"></i>${escapeHtml(typeLabel(s))} · ${escapeHtml(s.title)}</strong><span>${timeRange(s)}${toNum(s.fee)?` · ${money(s.fee).replace('NT$ ','$')}`:''}${toNum(s.ppf)?` · PPF ${money(s.ppf).replace('NT$ ','$')}`:''}</span></button>`).join('')}
-      ${dayShifts.length>3?`<div class="more-chip">＋${dayShifts.length-3} 班</div>`:''}
+      ${shown.map(s=>`<button class="event-chip ${state.selectedShiftIds.has(s.id)?'selected-for-delete':''}" data-edit="${s.id}" data-shift-id="${s.id}" type="button" style="--marker:${shiftColor(s)}">
+        ${state.batchDeleteMode?`<span class="batch-check" role="checkbox" aria-checked="${state.selectedShiftIds.has(s.id)?'true':'false'}"><span></span></span>`:''}
+        <strong><i class="chip-dot"></i>${escapeHtml(typeLabel(s))} · ${escapeHtml(s.title)}</strong>
+        <span>${timeRange(s)}${toNum(s.fee)?` · ${money(s.fee).replace('NT$ ','$')}`:''}${toNum(s.ppf)?` · PPF ${money(s.ppf).replace('NT$ ','$')}`:''}</span>
+      </button>`).join('')}
+      ${!state.batchDeleteMode && dayShifts.length>3?`<div class="more-chip">＋${dayShifts.length-3} 班</div>`:''}
     </div>`);
   }
   $('calendarGrid').innerHTML=cells.join('');
 }
+
 function renderAll() { renderToday(); renderCalendar(); renderIncome(); wireDynamic(); }
 function wireDynamic() {
-  document.querySelectorAll('[data-edit]').forEach(el=>el.onclick=()=>openShiftModal(state.shifts.find(s=>s.id===el.dataset.edit)));
-  document.querySelectorAll('[data-add-date]').forEach(el=>el.onclick=(e)=>{e.stopPropagation(); openShiftModal(null,el.dataset.addDate);});
+  document.querySelectorAll('[data-edit]').forEach(el=>el.onclick=()=>{
+    const shift=state.shifts.find(s=>s.id===el.dataset.edit);
+    if(!shift) return;
+    if(state.batchDeleteMode){
+      const next=!state.selectedShiftIds.has(shift.id);
+      toggleShiftSelection(shift.id,next);
+      renderCalendar();
+      wireDynamic();
+      return;
+    }
+    openShiftModal(shift);
+  });
+  document.querySelectorAll('[data-add-date]').forEach(el=>el.onclick=(e)=>{
+    e.stopPropagation();
+    if(state.batchDeleteMode) return;
+    openShiftModal(null,el.dataset.addDate);
+  });
 }
 
 function openShiftModal(shift=null,date=null) {
@@ -579,6 +704,23 @@ function openSettings() {
   else if(state.driveStatus==='idle') setAppDataStatus('cached','尚未載入雲端設定，目前使用本機快取；Calendar 排班仍可正常操作。');
   openModal('settingsModal');
 }
+
+if ($('batchDeleteBtn')) {
+  $('batchDeleteBtn').onclick = async () => {
+    if (!state.batchDeleteMode) {
+      setBatchDeleteMode(true);
+      showToast('批次刪除模式：在月曆上勾選要刪除的事件');
+      return;
+    }
+    if (state.selectedShiftIds.size === 0) {
+      setBatchDeleteMode(false);
+      showToast('已取消批次刪除');
+      return;
+    }
+    deleteSelectedShifts();
+  };
+}
+
 $('settingsBtn').onclick=openSettings;
 $('saveSettingsBtn').onclick=()=>{
   const clientId=$('googleClientId').value.trim();
