@@ -1,3 +1,4 @@
+window.ROSTER_VERSION = '4.5.1';
 const $ = (id) => document.getElementById(id);
 const TZ = 'Asia/Taipei';
 const WEEKDAYS = ['週日','週一','週二','週三','週四','週五','週六'];
@@ -705,20 +706,32 @@ function openSettings() {
   openModal('settingsModal');
 }
 
-if ($('batchDeleteBtn')) {
-  $('batchDeleteBtn').onclick = async () => {
-    if (!state.batchDeleteMode) {
-      setBatchDeleteMode(true);
-      showToast('批次刪除模式：在月曆上勾選要刪除的事件');
-      return;
-    }
-    if (state.selectedShiftIds.size === 0) {
-      setBatchDeleteMode(false);
-      showToast('已取消批次刪除');
-      return;
-    }
-    deleteSelectedShifts();
-  };
+function handleBatchDeleteAction() {
+  if (!state.batchDeleteMode) {
+    setBatchDeleteMode(true);
+    showToast('批次刪除模式：點選月曆事件即可勾選');
+    return;
+  }
+
+  if (state.selectedShiftIds.size === 0) {
+    setBatchDeleteMode(false);
+    showToast('已取消批次刪除');
+    return;
+  }
+
+  deleteSelectedShifts();
+}
+
+// 使用事件委派，避免 GitHub Pages 更新後 DOM / 快取造成新按鈕沒有 handler。
+const floatingActions = document.querySelector('.floating-actions');
+if (floatingActions) {
+  floatingActions.addEventListener('click', (event) => {
+    const button = event.target.closest('#batchDeleteBtn');
+    if (!button || button.disabled) return;
+    event.preventDefault();
+    event.stopPropagation();
+    handleBatchDeleteAction();
+  });
 }
 
 $('settingsBtn').onclick=openSettings;
