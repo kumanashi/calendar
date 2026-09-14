@@ -1,55 +1,66 @@
-# 個人排班行事曆 v4.2
+# 個人排班行事曆 v4.4
 
-本版保留 v4.1 的單欄灰白版面與排班操作，將跨裝置設定改為 Google Drive App Data。
+v4.4 保留原本版型，重點修正登入 Google 後 UI 操作與 Drive App Data 的容錯。
 
-## 資料儲存
+## v4.4 修正
 
-### Google Calendar 事件
+- Google 登入後，單次排班、固定排班、事件編輯、月曆切換、本月收入設定等 UI 不再依賴 Drive App Data 是否成功。
+- 強化 modal/backdrop：關閉的遮罩完全不接收滑鼠/觸控事件，並確保同一時間只會有一個 modal，避免透明遮罩擋住全頁。
+- Drive App Data 與 Google Calendar 同步解耦：
+  - Drive API 未啟用或讀取失敗時，Google Calendar 排班仍可正常讀寫。
+  - 設定與收入先保存本機快取，之後 App Data 恢復時再同步。
+- Drive App Data 狀態分為：
+  - 尚未檢查
+  - 本機快取
+  - 需要授權
+  - API 未啟用
+  - 讀取失敗
+  - 已同步
+- 若判定 Drive API 未啟用，設定畫面會直接出現「啟用 Google Drive API」按鈕。
+- 增加「檢查 / 載入 App Data」與「重新授權」按鈕。
+- 「連線 Google Calendar」不再每次強制跳 consent；只有需要重新授權 Drive scope 時才使用重新授權。
+
+## 雲端資料配置
+
+Google Calendar event：
 - 排班日期 / 時間
 - 診次類別
 - 節費
-- 每診 PPF
-- 診所 / 地點 / 備註
+- 該診 PPF
+- 備註
 
-### Google Drive App Data（隱藏應用資料）
-- Google OAuth Client ID（備份）
-- 排班 Calendar ID
-- Apple Secret iCal URL
-- 各診次統一顏色
+Google Drive App Data：
 - 每月牌費
-- 每月額外支援收入
-- 每月健保費用
+- 額外支援收入
+- 健保費用
+- 診次顏色
+- Google OAuth Client ID（備份）
+- Calendar ID
+- Apple iCal URL
 
-不再建立「收入設定」Google Calendar 特殊事件。
+本機 localStorage：
+- App Data 快取
+- Calendar 排班快取
+- 新裝置啟動所需 OAuth Client ID
 
-## 首次設定
+## Google Cloud
 
-Google Cloud 專案需同時啟用：
+需啟用：
 1. Google Calendar API
 2. Google Drive API
 
-OAuth Web client 需使用下列 scopes：
+OAuth scopes：
 - `https://www.googleapis.com/auth/calendar.events`
 - `https://www.googleapis.com/auth/drive.appdata`
 
-在 Google Auth Platform > Data Access 中也建議加入上述 scopes。
+Google Drive `appDataFolder` 是應用程式的隱藏資料區，不會顯示在一般「我的雲端硬碟」檔案列表。
 
-## 新裝置為什麼仍需先輸入一次 OAuth Client ID？
+## GitHub Pages 更新
 
-這是 OAuth 的啟動順序限制：瀏覽器必須先知道 Client ID 才能向 Google 取得 `drive.appdata` 存取權，因此不可能在尚未授權前先從 App Data 讀回 Client ID。
+將 ZIP 解壓縮後，把：
+- `index.html`
+- `app.js`
+- `styles.css`
+- `.nojekyll`
 
-新裝置第一次只要輸入 OAuth Client ID 並授權一次；之後 Calendar ID、iCal URL、顏色與收入設定都會從 Drive App Data 自動載入。Client ID 本身也會備份到 App Data。
-
-## v4.1 升級
-
-第一次成功取得 Drive App Data 權限時，如果雲端設定檔尚不存在，v4.2 會嘗試搬移目前瀏覽器內的：
-- Calendar ID
-- iCal URL
-- 診次顏色
-- 月收入設定
-
-並建立 `roster-calendar-v4.2.json` 到 App Data。
-
-## 發布到 GitHub Pages
-
-把 `index.html`、`app.js`、`styles.css`、`.nojekyll` 覆蓋到原 repository 後 Commit 即可。
+覆蓋原 GitHub repository 同名檔案並 Commit 即可。

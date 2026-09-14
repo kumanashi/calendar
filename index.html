@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#f3f3f1" />
-  <meta name="description" content="個人排班日曆 v4.2：GitHub Pages + Google Calendar + Drive App Data 同步" />
+  <meta name="description" content="個人排班日曆 v4.4：GitHub Pages + Google Calendar + Drive App Data 同步" />
   <title>個人排班表</title>
   <link rel="stylesheet" href="./styles.css" />
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -311,8 +311,17 @@
         </div>
       </div>
       <div class="settings-section cloud-status-box">
-        <h3>Drive App Data</h3>
-        <p id="appDataStatus">尚未載入雲端設定。首次使用前需在 Google Cloud 啟用 Google Drive API。</p>
+        <div class="cloud-status-head">
+          <h3>Drive App Data</h3>
+          <span class="status-badge neutral" id="appDataBadge">尚未檢查</span>
+        </div>
+        <p id="appDataStatus">尚未檢查雲端設定。Google Calendar 可獨立使用；App Data 若暫時不可用，設定會先保存在本機。</p>
+        <div class="cloud-status-actions">
+          <button class="btn ghost compact" id="retryAppDataBtn" type="button">檢查 / 載入 App Data</button>
+          <button class="btn ghost compact" id="reauthDriveBtn" type="button">重新授權</button>
+          <a class="btn ghost compact hidden" id="enableDriveApiLink" href="#" target="_blank" rel="noopener">啟用 Google Drive API</a>
+        </div>
+        <p class="field-note">狀態會區分：尚未授權、Drive API 未啟用、讀取失敗、使用本機快取、已同步。App Data 異常不會再鎖住其他按鈕。</p>
       </div>
       <div class="modal-actions">
         <div class="spacer"></div>

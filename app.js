@@ -1,7 +1,7 @@
 const $ = (id) => document.getElementById(id);
 const TZ = 'Asia/Taipei';
 const WEEKDAYS = ['週日','週一','週二','週三','週四','週五','週六'];
-const APPDATA_FILENAME = 'roster-calendar-v4.2.json';
+const APPDATA_FILENAME = 'roster-calendar-v4.2.json'; // 保留舊檔名以相容 v4.2/v4.1 資料
 const OAUTH_SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/drive.appdata';
 
 const SHIFT_TYPES = {
@@ -22,6 +22,8 @@ const state = {
   appDataFileId: null,
   cloudLoaded: false,
   cloudConfig: null,
+  driveStatus: 'idle',
+  driveLastError: '',
   typeColors: { ...DEFAULT_TYPE_COLORS }
 };
 
@@ -44,8 +46,19 @@ function showToast(message) {
   const el = $('toast'); el.textContent = message; el.classList.remove('hidden');
   clearTimeout(showToast._t); showToast._t = setTimeout(() => el.classList.add('hidden'), 3000);
 }
-function openModal(id) { $(id).classList.remove('hidden'); }
-function closeModal(id) { $(id).classList.add('hidden'); }
+function openModal(id) {
+  document.querySelectorAll('.modal-backdrop').forEach(el => {
+    if (el.id !== id) el.classList.add('hidden');
+  });
+  $(id).classList.remove('hidden');
+  document.body.classList.add('modal-open');
+}
+function closeModal(id) {
+  $(id).classList.add('hidden');
+  if (![...document.querySelectorAll('.modal-backdrop')].some(el => !el.classList.contains('hidden'))) {
+    document.body.classList.remove('modal-open');
+  }
+}
 
 function normalizeType(type, session='') {
   if (SHIFT_TYPES[type]) return type;
@@ -118,6 +131,7 @@ function cacheCloudConfigLocally(config) {
     schemaVersion: config.schemaVersion,
     googleClientId: config.googleClientId || '',
     calendarId: config.calendarId || '',
+    appleIcsUrl: config.appleIcsUrl || '',
     typeColors: config.typeColors || {},
     incomeSettings: config.incomeSettings || {},
     updatedAt: config.updatedAt || null
@@ -291,6 +305,93 @@ function googleEventPayload(s) {
   };
 }
 
+
+function projectNumberFromClientId() {
+  const m = String(getBootstrapClientId() || '').match(/^(\d+)-/);
+  return m ? m[1] : '';
+}
+function driveEnableUrl() {
+  const p = projectNumberFromClientId();
+  return p
+    ? `https://console.cloud.google.com/apis/library/drive.googleapis.com?project=${encodeURIComponent(p)}`
+    : 'https://console.cloud.google.com/apis/library/drive.googleapis.com';
+}
+function classifyDriveError(err) {
+  const text = String(err?.message || err || '');
+  if (/has not been used|is disabled|accessNotConfigured|SERVICE_DISABLED|API has not been used/i.test(text)) {
+    return { kind:'disabled', label:'API 未啟用', message:'Google Drive API 尚未啟用。Calendar 排班仍可使用；App Data 設定先保存在本機。' };
+  }
+  if (/insufficient authentication scopes|insufficient.*scope|ACCESS_TOKEN_SCOPE_INSUFFICIENT/i.test(text)) {
+    return { kind:'auth', label:'需要授權', message:'目前 Google 權杖沒有 Drive App Data 權限，請按「重新授權」。' };
+  }
+  if (err?.status === 401 || /invalid credentials|login required|unauth/i.test(text)) {
+    return { kind:'auth', label:'需要授權', message:'Google 授權已失效，請重新連線或按「重新授權」。' };
+  }
+  return { kind:'error', label:'讀取失敗', message:`Drive App Data 讀取失敗：${text || '未知錯誤'}。Calendar 排班仍可繼續使用。` };
+}
+function setAppDataStatus(kind, message='') {
+  state.driveStatus = kind;
+  state.driveLastError = message || '';
+  const badge = $('appDataBadge');
+  const text = $('appDataStatus');
+  const link = $('enableDriveApiLink');
+  if (!badge || !text || !link) return;
+  const map = {
+    idle:['尚未檢查','neutral'],
+    loading:['讀取中','neutral'],
+    ready:['已同步','success'],
+    cached:['本機快取','warning'],
+    auth:['需要授權','warning'],
+    disabled:['API 未啟用','danger'],
+    error:['讀取失敗','danger']
+  };
+  const [label, cls] = map[kind] || map.idle;
+  badge.textContent = label;
+  badge.className = `status-badge ${cls}`;
+  text.textContent = message || {
+    idle:'尚未檢查雲端設定。Google Calendar 可獨立使用；App Data 若暫時不可用，設定會先保存在本機。',
+    loading:'正在讀取 Google Drive App Data…',
+    ready:'Drive App Data 已載入，跨裝置設定同步正常。',
+    cached:'目前使用本機快取。Calendar 排班可正常使用，雲端設定待稍後補同步。',
+    auth:'需要重新取得 Drive App Data 授權。',
+    disabled:'Google Drive API 尚未啟用。Calendar 排班仍可使用；App Data 設定先保存在本機。',
+    error:'Drive App Data 暫時無法讀取。Calendar 排班仍可繼續使用。'
+  }[kind];
+  link.href = driveEnableUrl();
+  link.classList.toggle('hidden', kind !== 'disabled');
+}
+function saveCloudConfigLocalOnly(config) {
+  const next = mergeCloudConfig({...config, updatedAt: new Date().toISOString()});
+  applyCloudConfig(next);
+  setAppDataStatus('cached', '設定已先保存在本機；Drive App Data 尚未同步。Calendar 排班不受影響。');
+  return next;
+}
+async function tryLoadAppDataConfig({force=false}={}) {
+  setAppDataStatus('loading');
+  try {
+    const cfg = await loadAppDataConfig({force});
+    setAppDataStatus('ready', 'Drive App Data 已載入，跨裝置設定同步正常。');
+    return { ok:true, config:cfg };
+  } catch (err) {
+    const info = classifyDriveError(err);
+    setAppDataStatus(info.kind, info.message);
+    return { ok:false, error:err, info };
+  }
+}
+async function trySaveAppDataConfig(config=state.cloudConfig) {
+  setAppDataStatus('loading', '正在同步設定到 Drive App Data…');
+  try {
+    const cfg = await saveAppDataConfig(config);
+    setAppDataStatus('ready', '設定已同步至 Drive App Data。');
+    return { ok:true, config:cfg };
+  } catch (err) {
+    const info = classifyDriveError(err);
+    saveCloudConfigLocalOnly(config);
+    setAppDataStatus(info.kind, info.message);
+    return { ok:false, error:err, info };
+  }
+}
+
 async function googleRequest(url,options={}) {
   if(!state.googleToken) throw new Error('尚未取得 Google 授權');
   const headers={Authorization:`Bearer ${state.googleToken}`,...(options.headers||{})};
@@ -299,7 +400,9 @@ async function googleRequest(url,options={}) {
   if(!res.ok) {
     let detail=''; try { const j=await res.json(); detail=j.error?.message||j.error_description||''; } catch {}
     if(res.status===401) state.googleToken=null;
-    throw new Error(detail||`Google API ${res.status}`);
+    const err = new Error(detail||`Google API ${res.status}`);
+    err.status = res.status;
+    throw err;
   }
   if(res.status===204) return null;
   const ct=res.headers.get('content-type')||'';
@@ -333,7 +436,7 @@ async function saveAppDataConfig(config=state.cloudConfig) {
   if(!state.appDataFileId) await findAppDataFile();
   if(state.appDataFileId) await updateAppDataFile(state.appDataFileId,next); else await createAppDataFile(next);
   applyCloudConfig(next); state.cloudLoaded=true;
-  if($('appDataStatus')) $('appDataStatus').textContent=`已同步至 Drive App Data · ${new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})}`;
+  setAppDataStatus('ready', `已同步至 Drive App Data · ${new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})}`);
   return next;
 }
 async function loadAppDataConfig({force=false}={}) {
@@ -349,13 +452,13 @@ async function loadAppDataConfig({force=false}={}) {
     remote.typeColors={...DEFAULT_TYPE_COLORS,...remote.typeColors};
     remote.incomeSettings={...legacy.incomeSettings,...remote.incomeSettings};
     applyCloudConfig(remote); state.cloudLoaded=true;
-    if($('appDataStatus')) $('appDataStatus').textContent=`已載入 Drive App Data · ${file.modifiedTime?new Date(file.modifiedTime).toLocaleString('zh-TW'):''}`;
+    setAppDataStatus('ready', `已載入 Drive App Data${file.modifiedTime?` · ${new Date(file.modifiedTime).toLocaleString('zh-TW')}`:''}`);
     return remote;
   }
   const migrated=mergeCloudConfig(legacy);
   await saveAppDataConfig(migrated);
   cleanupLegacyStorage();
-  if($('appDataStatus')) $('appDataStatus').textContent='已建立 Drive App Data，並搬移舊版設定';
+  setAppDataStatus('ready', '已建立 Drive App Data，並搬移舊版設定');
   return state.cloudConfig;
 }
 function cleanupLegacyStorage() {
@@ -365,8 +468,8 @@ function cleanupLegacyStorage() {
   const keys=[]; for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i); if(k&&/^roster_income_\d{4}-\d{2}$/.test(k)) keys.push(k);} keys.forEach(k=>localStorage.removeItem(k));
 }
 
-async function fetchAllEvents() {
-  await loadAppDataConfig();
+async function fetchAllEvents({refreshCloud=true}={}) {
+  if (refreshCloud) await tryLoadAppDataConfig({force:true});
   const calendarId=getCalendarId(); if(!calendarId) throw new Error('Drive App Data 中尚未設定排班 Calendar ID');
   let pageToken='', all=[];
   do {
@@ -389,13 +492,13 @@ function initGoogleTokenClient() {
     callback:async(resp)=>{
       if(resp.error){showToast(`Google 授權失敗：${resp.error}`); state.pendingGoogleAction=null; return;}
       state.googleToken=resp.access_token; const action=state.pendingGoogleAction; state.pendingGoogleAction=null;
-      if(action){try{await action();}catch(err){showToast(err.message); $('syncStatus').textContent=`同步失敗：${err.message}`;}}
+      if(action){try{await action();}catch(err){showToast(err.message);}}
     }
   });
 }
 function withGoogleAccess(action,{forceConsent=false}={}) {
   if(!getBootstrapClientId()){openSettings(); showToast('新裝置第一次使用請先輸入 Google OAuth Client ID'); return;}
-  if(state.googleToken){Promise.resolve(action()).catch(err=>{showToast(err.message); $('syncStatus').textContent=`同步失敗：${err.message}`;}); return;}
+  if(state.googleToken){Promise.resolve(action()).catch(err=>{showToast(err.message);}); return;}
   try { initGoogleTokenClient(); state.pendingGoogleAction=action; state.tokenClient.requestAccessToken({prompt:forceConsent?'consent':''}); }
   catch(err){showToast(err.message);}
 }
@@ -404,7 +507,7 @@ $('shiftForm').addEventListener('submit',(e)=>{
   e.preventDefault(); const id=$('shiftId').value;
   const payload={title:$('titleInput').value.trim(),location:$('locationInput').value.trim(),date:$('dateInput').value,type:$('typeInput').value,start:$('startInput').value,end:$('endInput').value,fee:toNum($('feeInput').value),ppf:toNum($('shiftPpfInput').value),customType:$('typeInput').value==='other'?$('customTypeInput').value.trim():'',note:$('noteInput').value.trim()};
   withGoogleAccess(async()=>{
-    await loadAppDataConfig(); const cal=getCalendarId(); if(!cal) throw new Error('請先設定排班 Calendar ID');
+    await tryLoadAppDataConfig(); const cal=getCalendarId(); if(!cal) throw new Error('請先在同步設定輸入排班 Calendar ID');
     const path=`/calendars/${encodeURIComponent(cal)}/events${id?`/${encodeURIComponent(id)}`:''}`;
     await calendarRequest(path,{method:id?'PATCH':'POST',body:JSON.stringify(googleEventPayload(payload))});
     closeModal('shiftModal'); await fetchAllEvents(); showToast(id?'班表已更新':'班表已新增');
@@ -412,28 +515,52 @@ $('shiftForm').addEventListener('submit',(e)=>{
 });
 $('deleteShiftBtn').onclick=()=>{
   const id=$('shiftId').value; if(!id||!confirm('確定刪除這個班別？Google Calendar 中的事件也會一起刪除。')) return;
-  withGoogleAccess(async()=>{await loadAppDataConfig(); const cal=getCalendarId(); await calendarRequest(`/calendars/${encodeURIComponent(cal)}/events/${encodeURIComponent(id)}`,{method:'DELETE'}); closeModal('shiftModal'); await fetchAllEvents(); showToast('班表已刪除');});
+  withGoogleAccess(async()=>{await tryLoadAppDataConfig(); const cal=getCalendarId(); if(!cal) throw new Error('請先在同步設定輸入排班 Calendar ID'); await calendarRequest(`/calendars/${encodeURIComponent(cal)}/events/${encodeURIComponent(id)}`,{method:'DELETE'}); closeModal('shiftModal'); await fetchAllEvents(); showToast('班表已刪除');});
 };
 $('bulkForm').addEventListener('submit',(e)=>{
   e.preventDefault(); const dates=bulkDates(); if(!dates.length){showToast('請選擇星期與有效的日期範圍');return;} if(dates.length>200){showToast('一次最多建立 200 班，請縮短日期範圍');return;}
   const base={title:$('bulkTitleInput').value.trim(),location:$('bulkLocationInput').value.trim(),type:$('bulkTypeInput').value,start:$('bulkStartInput').value,end:$('bulkEndInput').value,fee:toNum($('bulkFeeInput').value),ppf:toNum($('bulkPpfInput').value),customType:$('bulkTypeInput').value==='other'?$('bulkCustomTypeInput').value.trim():'',note:$('bulkNoteInput').value.trim()};
   withGoogleAccess(async()=>{
-    await loadAppDataConfig(); const cal=getCalendarId(); if(!cal) throw new Error('請先設定排班 Calendar ID'); $('bulkSubmitBtn').disabled=true;
+    await tryLoadAppDataConfig(); const cal=getCalendarId(); if(!cal) throw new Error('請先在同步設定輸入排班 Calendar ID'); $('bulkSubmitBtn').disabled=true;
     try { for(let i=0;i<dates.length;i++){ $('bulkSubmitBtn').textContent=`建立中 ${i+1}/${dates.length}`; await calendarRequest(`/calendars/${encodeURIComponent(cal)}/events`,{method:'POST',body:JSON.stringify(googleEventPayload({...base,date:dates[i]}))}); } closeModal('bulkModal'); await fetchAllEvents(); showToast(`已建立 ${dates.length} 班固定排班`); }
     finally { $('bulkSubmitBtn').disabled=false; $('bulkSubmitBtn').textContent='建立固定排班'; }
   });
 });
 $('incomeForm').addEventListener('submit',(e)=>{
-  e.preventDefault(); const key=monthKey(); const data={license:toNum($('licenseFeeInput').value),support:toNum($('supportIncomeInput').value),insurance:toNum($('insuranceCostInput').value)};
-  withGoogleAccess(async()=>{await loadAppDataConfig({force:true}); state.cloudConfig.incomeSettings={...(state.cloudConfig.incomeSettings||{}),[key]:data}; await saveAppDataConfig(state.cloudConfig); closeModal('incomeModal'); renderIncome(); showToast(`${key} 收入設定已同步到 Drive App Data`);});
+  e.preventDefault();
+  const key=monthKey();
+  const data={license:toNum($('licenseFeeInput').value),support:toNum($('supportIncomeInput').value),insurance:toNum($('insuranceCostInput').value)};
+  const localNext=mergeCloudConfig(state.cloudConfig||localMigrationConfig());
+  localNext.incomeSettings={...(localNext.incomeSettings||{}),[key]:data};
+  saveCloudConfigLocalOnly(localNext);
+  closeModal('incomeModal'); renderIncome();
+  showToast(`${key} 收入設定已儲存`);
+  withGoogleAccess(async()=>{
+    const loaded=await tryLoadAppDataConfig({force:true});
+    const base=loaded.ok ? state.cloudConfig : localNext;
+    base.incomeSettings={...(base.incomeSettings||{}),[key]:data};
+    const saved=await trySaveAppDataConfig(base);
+    if(saved.ok) showToast(`${key} 收入設定已同步到 Drive App Data`);
+  });
 });
 
 $('prevMonth').onclick=()=>{state.cursor=new Date(state.cursor.getFullYear(),state.cursor.getMonth()-1,1);renderCalendar();renderIncome();wireDynamic();};
 $('nextMonth').onclick=()=>{state.cursor=new Date(state.cursor.getFullYear(),state.cursor.getMonth()+1,1);renderCalendar();renderIncome();wireDynamic();};
 $('todayBtn').onclick=()=>{state.cursor=new Date();renderCalendar();renderIncome();wireDynamic();};
 $('addShiftBtn').onclick=()=>openShiftModal(); $('bulkShiftBtn').onclick=openBulkModal; $('incomeSettingsBtn').onclick=openIncomeModal;
-$('refreshBtn').onclick=()=>withGoogleAccess(async()=>{await loadAppDataConfig({force:true});await fetchAllEvents();});
-$('googleSyncBtn').onclick=()=>withGoogleAccess(async()=>{ $('syncStatus').textContent='正在同步 Drive App Data 與 Google Calendar…'; await loadAppDataConfig({force:true}); await fetchAllEvents(); showToast('Google Calendar 與 App Data 已更新'); },{forceConsent:true});
+$('refreshBtn').onclick=()=>withGoogleAccess(async()=>{await tryLoadAppDataConfig({force:true});await fetchAllEvents({refreshCloud:false});});
+$('googleSyncBtn').onclick=()=>withGoogleAccess(async()=>{
+  $('syncStatus').textContent='正在同步 Google Calendar…';
+  const cloud=await tryLoadAppDataConfig({force:true});
+  try {
+    await fetchAllEvents({refreshCloud:false});
+    $('syncStatus').textContent=`Google Calendar 已同步 · ${state.shifts.length} 筆排班${cloud.ok?' · App Data 已同步':' · App Data 使用本機快取'}`;
+    showToast(cloud.ok?'Google Calendar 與 App Data 已更新':'Google Calendar 已更新；App Data 待修復後補同步');
+  } catch(err) {
+    $('syncStatus').textContent=`Calendar 同步失敗：${err.message}`;
+    throw err;
+  }
+});
 
 document.querySelectorAll('[data-close]').forEach(el=>el.onclick=()=>closeModal(el.dataset.close));
 document.querySelectorAll('.modal-backdrop').forEach(el=>el.addEventListener('click',e=>{if(e.target===el)closeModal(el.id);}));
@@ -448,31 +575,56 @@ function openSettings() {
   $('googleCalendarId').value=c.calendarId||'';
   $('appleIcsUrl').value=c.appleIcsUrl||'';
   document.querySelectorAll('[data-type-color]').forEach(el=>el.value=(c.typeColors||DEFAULT_TYPE_COLORS)[el.dataset.typeColor]||DEFAULT_TYPE_COLORS[el.dataset.typeColor]);
-  $('appDataStatus').textContent=state.cloudLoaded?'Drive App Data 已載入；儲存會同步到雲端。':'尚未載入雲端設定；新裝置第一次只需先輸入 OAuth Client ID。';
+  if(state.cloudLoaded) setAppDataStatus('ready','Drive App Data 已載入；儲存會同步到雲端。');
+  else if(state.driveStatus==='idle') setAppDataStatus('cached','尚未載入雲端設定，目前使用本機快取；Calendar 排班仍可正常操作。');
   openModal('settingsModal');
 }
 $('settingsBtn').onclick=openSettings;
 $('saveSettingsBtn').onclick=()=>{
-  const clientId=$('googleClientId').value.trim(); if(!clientId){showToast('請輸入 Google OAuth Client ID');return;}
+  const clientId=$('googleClientId').value.trim();
+  if(!clientId){showToast('請輸入 Google OAuth Client ID');return;}
   const oldClient=getBootstrapClientId();
-  const wasCloudLoaded=state.cloudLoaded;
   localStorage.setItem('roster_google_client_id',clientId);
-  if(oldClient&&oldClient!==clientId){state.tokenClient=null;state.googleToken=null;state.cloudLoaded=false;state.appDataFileId=null;}
-  const draft={googleClientId:clientId,calendarId:$('googleCalendarId').value.trim(),appleIcsUrl:$('appleIcsUrl').value.trim(),typeColors:{}};
+  if(oldClient&&oldClient!==clientId){
+    state.tokenClient=null; state.googleToken=null; state.cloudLoaded=false; state.appDataFileId=null;
+  }
+  const draft={
+    googleClientId:clientId,
+    calendarId:$('googleCalendarId').value.trim(),
+    appleIcsUrl:$('appleIcsUrl').value.trim(),
+    typeColors:{}
+  };
   document.querySelectorAll('[data-type-color]').forEach(el=>draft.typeColors[el.dataset.typeColor]=el.value);
+  const localNext=mergeCloudConfig({...state.cloudConfig,...draft,typeColors:{...(state.cloudConfig?.typeColors||{}),...draft.typeColors}});
+  saveCloudConfigLocalOnly(localNext);
+  cleanupLegacyStorage();
+  closeModal('settingsModal');
+  loadShiftCache(); renderAll();
+  showToast('設定已儲存；正在嘗試同步 Drive App Data');
+
   withGoogleAccess(async()=>{
-    await loadAppDataConfig({force:true});
-    // 新裝置第一次只填 Client ID 時，先保留雲端既有 Calendar/iCal/顏色，避免空白表單覆寫。
-    const nextDraft={...draft};
-    if(!wasCloudLoaded){
-      if(!nextDraft.calendarId) nextDraft.calendarId=state.cloudConfig.calendarId||'';
-      if(!nextDraft.appleIcsUrl) nextDraft.appleIcsUrl=state.cloudConfig.appleIcsUrl||'';
-      nextDraft.typeColors={...state.cloudConfig.typeColors};
-    }
-    const next=mergeCloudConfig({...state.cloudConfig,...nextDraft,typeColors:{...state.cloudConfig.typeColors,...nextDraft.typeColors}});
-    await saveAppDataConfig(next); cleanupLegacyStorage(); closeModal('settingsModal'); loadShiftCache(); renderAll(); showToast('同步設定已儲存到 Drive App Data');
+    const loaded=await tryLoadAppDataConfig({force:true});
+    const remoteBase=loaded.ok ? state.cloudConfig : localNext;
+    const next=mergeCloudConfig({
+      ...remoteBase,
+      ...draft,
+      incomeSettings:{...(remoteBase.incomeSettings||{}),...(localNext.incomeSettings||{})},
+      typeColors:{...(remoteBase.typeColors||{}),...draft.typeColors}
+    });
+    const saved=await trySaveAppDataConfig(next);
+    if(saved.ok) showToast('同步設定已儲存到 Drive App Data');
   },{forceConsent:oldClient!==clientId});
 };
+$('retryAppDataBtn').onclick=()=>withGoogleAccess(async()=>{
+  const result=await tryLoadAppDataConfig({force:true});
+  if(result.ok){ renderAll(); showToast('Drive App Data 已載入'); }
+  else showToast(result.info?.message || 'App Data 讀取失敗');
+});
+$('reauthDriveBtn').onclick=()=>withGoogleAccess(async()=>{
+  const result=await tryLoadAppDataConfig({force:true});
+  if(result.ok){ renderAll(); showToast('Drive App Data 授權完成'); }
+},{forceConsent:true});
+
 $('appleSubscribeBtn').onclick=()=>{
   const url=getAppleIcsUrl();
   if(!url){showToast('請先連線 Google，載入 Drive App Data 中的 Apple iCal URL');return;}
@@ -483,4 +635,5 @@ $('appleSubscribeBtn').onclick=()=>{
 state.cloudConfig=mergeCloudConfig(localMigrationConfig());
 state.typeColors={...state.cloudConfig.typeColors};
 loadShiftCache(); renderAll();
+setAppDataStatus('cached','尚未載入 Drive App Data，目前使用本機快取；Calendar 排班可獨立操作。');
 if(getBootstrapClientId()) $('syncStatus').textContent=`顯示本機快取 · ${state.shifts.length} 筆；按「連線 Google Calendar」取得最新 App Data 與排班`;

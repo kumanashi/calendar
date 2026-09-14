@@ -221,3 +221,37 @@ body { padding-bottom: 74px; }
 .category-color-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;margin-top:12px}.category-color-grid label{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fafafa}.category-color-grid input[type=color]{width:38px;height:30px;padding:2px;border:0;background:transparent}@media(max-width:560px){.category-color-grid{grid-template-columns:1fr}}
 
 .field-note{display:block;color:var(--muted);font-size:10px;font-weight:500;line-height:1.45;margin-top:-2px}.cloud-status-box{background:#f7f7f5;border-radius:12px;padding:13px 14px!important;border:1px solid var(--line)!important;margin-top:8px}.cloud-status-box h3{margin:0 0 5px}.cloud-status-box p{margin:0}.shift-fee{margin-top:7px;font-size:11px;color:var(--muted);font-weight:700}
+
+/* v4.4: resilient modal/click handling */
+.modal-backdrop.hidden {
+  display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+.modal-backdrop:not(.hidden) {
+  pointer-events: auto;
+  visibility: visible;
+}
+.modal { position: relative; z-index: 1; }
+button:disabled { cursor: wait; opacity: .58; }
+.floating-actions { z-index: 15; }
+
+.cloud-status-head{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+}
+.cloud-status-head h3{margin:0}
+.status-badge{
+  display:inline-flex; align-items:center; min-height:24px; padding:4px 8px;
+  border-radius:999px; border:1px solid var(--line); font-size:10px; font-weight:800;
+  white-space:nowrap;
+}
+.status-badge.neutral{background:#f1f1ef;color:#666760}
+.status-badge.success{background:#edf5ef;color:#356044;border-color:#cfe3d4}
+.status-badge.warning{background:#f8f4e9;color:#7a6225;border-color:#e9ddbc}
+.status-badge.danger{background:#f8eded;color:#8a3e3e;border-color:#ecd1d1}
+.cloud-status-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.cloud-status-actions .btn{ text-decoration:none; display:inline-flex; align-items:center; justify-content:center; }
+.cloud-status-box p{margin:8px 0 0}
+@media(max-width:560px){
+  .cloud-status-actions{display:grid;grid-template-columns:1fr}
+}
