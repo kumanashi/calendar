@@ -1,48 +1,55 @@
-# 個人排班表 v3（GitHub Pages）
+# 個人排班行事曆 v4.2
 
-純 HTML / CSS / JavaScript，可直接部署到 GitHub Pages，不需要 Node.js 常駐伺服器。
+本版保留 v4.1 的單欄灰白版面與排班操作，將跨裝置設定改為 Google Drive App Data。
 
-## v3 功能
+## 資料儲存
 
-- 單欄灰白色介面，順序：Today → 月曆 → 每月預估收入 → 同步狀態。
-- 右下角小型快捷按鈕：單次排班、固定排班、同步設定。
-- 排班類別：早診、午診、晚診、支援、健檢、月中、疫苗、其他。
-- 「其他」可自訂類別名稱。
-- 每一班可選顏色標記；月曆與 Today 只以色點/左側色條呈現，維持灰白主視覺。
-- 固定排班可一次建立 1、2、6、12 個月或自訂日期範圍。
-- 每節可設定不同節費。
-- 每月收入：牌費 + 當月節費 + PPF + 額外支援收入 - 健保費用。
-- Google Calendar 雙向讀寫（網站新增/修改/刪除後寫入 Google；重新整理可讀回 Google 的修改）。
-- Apple Calendar 可透過 Google Calendar 的 Secret iCal URL 訂閱。
+### Google Calendar 事件
+- 排班日期 / 時間
+- 診次類別
+- 節費
+- 每診 PPF
+- 診所 / 地點 / 備註
 
-## GitHub Pages
+### Google Drive App Data（隱藏應用資料）
+- Google OAuth Client ID（備份）
+- 排班 Calendar ID
+- Apple Secret iCal URL
+- 各診次統一顏色
+- 每月牌費
+- 每月額外支援收入
+- 每月健保費用
 
-將以下檔案放在 repository 根目錄：
+不再建立「收入設定」Google Calendar 特殊事件。
 
-- index.html
-- styles.css
-- app.js
-- .nojekyll
+## 首次設定
 
-Settings → Pages → Deploy from a branch → main / root。
+Google Cloud 專案需同時啟用：
+1. Google Calendar API
+2. Google Drive API
 
-## Google Calendar
+OAuth Web client 需使用下列 scopes：
+- `https://www.googleapis.com/auth/calendar.events`
+- `https://www.googleapis.com/auth/drive.appdata`
 
-在同步設定輸入：
+在 Google Auth Platform > Data Access 中也建議加入上述 scopes。
 
-1. Google OAuth Client ID
-2. 排班專用 Calendar ID
-3. Apple Calendar 使用的 Secret iCal URL（可選）
+## 新裝置為什麼仍需先輸入一次 OAuth Client ID？
 
-Google OAuth Web Application 的 Authorized JavaScript origin 要設定為 GitHub Pages 網域，例如：
+這是 OAuth 的啟動順序限制：瀏覽器必須先知道 Client ID 才能向 Google 取得 `drive.appdata` 存取權，因此不可能在尚未授權前先從 App Data 讀回 Client ID。
 
-`https://你的帳號.github.io`
+新裝置第一次只要輸入 OAuth Client ID 並授權一次；之後 Calendar ID、iCal URL、顏色與收入設定都會從 Drive App Data 自動載入。Client ID 本身也會備份到 App Data。
 
-不要把 Client secret 或 Secret iCal URL 寫進 repository。
+## v4.1 升級
 
-## 顏色資料
+第一次成功取得 Drive App Data 權限時，如果雲端設定檔尚不存在，v4.2 會嘗試搬移目前瀏覽器內的：
+- Calendar ID
+- iCal URL
+- 診次顏色
+- 月收入設定
 
-排班顏色與類別會寫在 Google Calendar event 的 `extendedProperties.private` 中，因此本網站重新讀取事件時可還原顏色與收入用節費。
+並建立 `roster-calendar-v4.2.json` 到 App Data。
 
-## v4：收入設定跨裝置同步
-牌費、PPF、額外支援收入、健保費用不再只依賴單一瀏覽器。儲存時會在同一本 Google Calendar 建立一筆 `收入設定｜YYYY-MM` 的全天透明事件，數值放在事件的 private extended properties；網站同步時會讀回並隱藏這類事件，不會當成排班顯示。Google Calendar 本身仍會看得到該筆「收入設定」全天事件。
+## 發布到 GitHub Pages
+
+把 `index.html`、`app.js`、`styles.css`、`.nojekyll` 覆蓋到原 repository 後 Commit 即可。
