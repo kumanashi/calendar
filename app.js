@@ -1,9 +1,11 @@
-window.ROSTER_VERSION = '4.5.1';
+window.ROSTER_VERSION = '4.6';
 const $ = (id) => document.getElementById(id);
 const TZ = 'Asia/Taipei';
 const WEEKDAYS = ['週日','週一','週二','週三','週四','週五','週六'];
 const APPDATA_FILENAME = 'roster-calendar-v4.2.json'; // 保留舊檔名以相容 v4.2/v4.1 資料
 const OAUTH_SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/drive.appdata';
+const PIN_VERIFIER_CACHE_KEY = 'roster_pin_verifier_v46';
+const PIN_ITERATIONS = 150000;
 
 const SHIFT_TYPES = {
   morning: '早診', afternoon: '午診', evening: '晚診', support: '支援',
@@ -27,6 +29,8 @@ const state = {
   driveLastError: '',
   batchDeleteMode: false,
   selectedShiftIds: new Set(),
+  pinUnlocked: false,
+  pinCloudReady: false,
   typeColors: { ...DEFAULT_TYPE_COLORS }
 };
 
@@ -90,6 +94,7 @@ function defaultCloudConfig() {
     appleIcsUrl: '',
     typeColors: { ...DEFAULT_TYPE_COLORS },
     incomeSettings: {},
+    security: { pin: null },
     updatedAt: null
   };
 }
@@ -126,7 +131,8 @@ function mergeCloudConfig(input={}) {
     ...base,
     ...input,
     typeColors: { ...DEFAULT_TYPE_COLORS, ...(input.typeColors || {}) },
-    incomeSettings: { ...(input.incomeSettings || {}) }
+    incomeSettings: { ...(input.incomeSettings || {}) },
+    security: { ...(base.security || {}), ...(input.security || {}) }
   };
 }
 function cacheCloudConfigLocally(config) {
@@ -144,6 +150,7 @@ function cacheCloudConfigLocally(config) {
 }
 function applyCloudConfig(config) {
   state.cloudConfig = mergeCloudConfig(config);
+  cachePinVerifierFromConfig(state.cloudConfig);
   state.typeColors = { ...state.cloudConfig.typeColors };
   cacheCloudConfigLocally(state.cloudConfig);
   renderAll();
@@ -431,6 +438,234 @@ function googleEventPayload(s) {
   };
 }
 
+
+
+function pinBytesToB64(bytes) {
+  let bin = '';
+  bytes.forEach(b => bin += String.fromCharCode(b));
+  return btoa(bin);
+}
+function pinB64ToBytes(b64) {
+  const bin = atob(b64);
+  return Uint8Array.from(bin, c => c.charCodeAt(0));
+}
+async function derivePinHash(pin, saltB64, iterations=PIN_ITERATIONS) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({
+    name: 'PBKDF2',
+    salt: pinB64ToBytes(saltB64),
+    iterations,
+    hash: 'SHA-256'
+  }, key, 256);
+  return pinBytesToB64(new Uint8Array(bits));
+}
+async function createPinVerifier(pin) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const saltB64 = pinBytesToB64(salt);
+  const hash = await derivePinHash(pin, saltB64, PIN_ITERATIONS);
+  return {
+    algorithm: 'PBKDF2-SHA256',
+    salt: saltB64,
+    hash,
+    iterations: PIN_ITERATIONS,
+    updatedAt: new Date().toISOString()
+  };
+}
+function getLocalPinVerifier() {
+  try {
+    const v = JSON.parse(localStorage.getItem(PIN_VERIFIER_CACHE_KEY) || 'null');
+    return v && v.salt && v.hash ? v : null;
+  } catch {
+    return null;
+  }
+}
+function cachePinVerifier(verifier) {
+  if (!verifier?.salt || !verifier?.hash) return;
+  localStorage.setItem(PIN_VERIFIER_CACHE_KEY, JSON.stringify({
+    algorithm: verifier.algorithm || 'PBKDF2-SHA256',
+    salt: verifier.salt,
+    hash: verifier.hash,
+    iterations: Number(verifier.iterations) || PIN_ITERATIONS,
+    updatedAt: verifier.updatedAt || null
+  }));
+}
+function cachePinVerifierFromConfig(config) {
+  const verifier = config?.security?.pin;
+  if (verifier?.salt && verifier?.hash) cachePinVerifier(verifier);
+}
+async function verifyPin(pin, verifier) {
+  if (!verifier?.salt || !verifier?.hash) return false;
+  const candidate = await derivePinHash(pin, verifier.salt, Number(verifier.iterations) || PIN_ITERATIONS);
+  if (candidate.length !== verifier.hash.length) return false;
+  let diff = 0;
+  for (let i=0; i<candidate.length; i++) diff |= candidate.charCodeAt(i) ^ verifier.hash.charCodeAt(i);
+  return diff === 0;
+}
+function validPin(pin) { return /^[0-9]{4,8}$/.test(String(pin || '')); }
+
+function pinShowStep(id) {
+  ['pinGateLoading','pinUnlockForm','pinCloudStep','pinSetupForm'].forEach(stepId => {
+    const el = $(stepId);
+    if (el) el.classList.toggle('hidden', stepId !== id);
+  });
+}
+function pinSetError(id, message='') {
+  const el = $(id);
+  if (!el) return;
+  el.textContent = message;
+  el.classList.toggle('hidden', !message);
+}
+function unlockRoster() {
+  state.pinUnlocked = true;
+  document.body.classList.remove('app-locked');
+  $('pinGate')?.classList.add('hidden');
+  setTimeout(() => $('pinUnlockInput')?.blur(), 0);
+}
+function showPinUnlock(verifier=getLocalPinVerifier()) {
+  if (!verifier) {
+    showPinCloudBootstrap();
+    return;
+  }
+  pinShowStep('pinUnlockForm');
+  pinSetError('pinUnlockError', '');
+  const input = $('pinUnlockInput');
+  input.value = '';
+  setTimeout(() => input.focus(), 40);
+}
+function showPinCloudBootstrap(message='') {
+  pinShowStep('pinCloudStep');
+  pinSetError('pinCloudError', message);
+  const hasClient = !!getBootstrapClientId();
+  $('pinClientIdLabel')?.classList.toggle('hidden', hasClient);
+  if (!hasClient) $('pinClientIdInput').value = '';
+}
+function showPinSetup() {
+  pinShowStep('pinSetupForm');
+  pinSetError('pinSetupError', '');
+  $('pinSetupInput').value = '';
+  $('pinSetupConfirm').value = '';
+  setTimeout(() => $('pinSetupInput').focus(), 40);
+}
+
+function initPinGate() {
+  document.body.classList.add('app-locked');
+  const localVerifier = getLocalPinVerifier();
+  if (localVerifier) showPinUnlock(localVerifier);
+  else showPinCloudBootstrap();
+}
+
+async function loadPinConfigFromDrive() {
+  const button = $('pinLoadCloudBtn');
+  const inputClient = $('pinClientIdInput')?.value.trim();
+
+  if (!getBootstrapClientId()) {
+    if (!inputClient) {
+      pinSetError('pinCloudError', '請先輸入 Google OAuth Client ID。');
+      return;
+    }
+    localStorage.setItem('roster_google_client_id', inputClient);
+    state.tokenClient = null;
+    state.googleToken = null;
+  }
+
+  button.disabled = true;
+  button.textContent = '載入中…';
+  pinSetError('pinCloudError', '');
+
+  withGoogleAccess(async () => {
+    try {
+      const result = await tryLoadAppDataConfig({force:true});
+      if (!result.ok) {
+        pinSetError('pinCloudError', result.info?.message || '無法讀取 Drive App Data。');
+        return;
+      }
+      state.pinCloudReady = true;
+      const verifier = state.cloudConfig?.security?.pin;
+      if (verifier?.salt && verifier?.hash) {
+        cachePinVerifier(verifier);
+        showPinUnlock(verifier);
+      } else {
+        showPinSetup();
+      }
+    } finally {
+      button.disabled = false;
+      button.textContent = '連線 Google 並載入';
+    }
+  }, {forceConsent:false});
+}
+
+async function saveFirstPin(pin) {
+  if (!state.googleToken) throw new Error('尚未取得 Google 授權，請重新載入安全設定。');
+  const verifier = await createPinVerifier(pin);
+  const next = mergeCloudConfig(state.cloudConfig || localMigrationConfig());
+  next.security = { ...(next.security || {}), pin: verifier };
+  await saveAppDataConfig(next);
+  cachePinVerifier(verifier);
+  state.pinCloudReady = true;
+  return verifier;
+}
+
+function wirePinGate() {
+  $('pinLoadCloudBtn')?.addEventListener('click', loadPinConfigFromDrive);
+
+  $('pinUnlockForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const input = $('pinUnlockInput');
+    const pin = input.value.trim();
+    const verifier = getLocalPinVerifier();
+    if (!validPin(pin)) {
+      pinSetError('pinUnlockError', '請輸入 4–8 位數字 PIN。');
+      return;
+    }
+    const button = event.submitter || $('pinUnlockForm').querySelector('button[type="submit"]');
+    button.disabled = true;
+    button.textContent = '驗證中…';
+    try {
+      const ok = await verifyPin(pin, verifier);
+      if (!ok) {
+        pinSetError('pinUnlockError', 'PIN 不正確。');
+        input.select();
+        return;
+      }
+      pinSetError('pinUnlockError', '');
+      unlockRoster();
+    } catch (err) {
+      pinSetError('pinUnlockError', `PIN 驗證失敗：${err.message}`);
+    } finally {
+      button.disabled = false;
+      button.textContent = '解鎖';
+    }
+  });
+
+  $('pinSetupForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const pin = $('pinSetupInput').value.trim();
+    const confirmPin = $('pinSetupConfirm').value.trim();
+    if (!validPin(pin)) {
+      pinSetError('pinSetupError', 'PIN 必須是 4–8 位數字。');
+      return;
+    }
+    if (pin !== confirmPin) {
+      pinSetError('pinSetupError', '兩次輸入的 PIN 不一致。');
+      return;
+    }
+    const button = event.submitter || $('pinSetupForm').querySelector('button[type="submit"]');
+    button.disabled = true;
+    button.textContent = '儲存中…';
+    try {
+      await saveFirstPin(pin);
+      pinSetError('pinSetupError', '');
+      unlockRoster();
+      showToast('PIN 已安全儲存至 Drive App Data');
+    } catch (err) {
+      pinSetError('pinSetupError', `PIN 儲存失敗：${err.message}`);
+    } finally {
+      button.disabled = false;
+      button.textContent = '儲存 PIN 並進入';
+    }
+  });
+}
 
 function projectNumberFromClientId() {
   const m = String(getBootstrapClientId() || '').match(/^(\d+)-/);
@@ -792,3 +1027,5 @@ state.typeColors={...state.cloudConfig.typeColors};
 loadShiftCache(); renderAll();
 setAppDataStatus('cached','尚未載入 Drive App Data，目前使用本機快取；Calendar 排班可獨立操作。');
 if(getBootstrapClientId()) $('syncStatus').textContent=`顯示本機快取 · ${state.shifts.length} 筆；按「連線 Google Calendar」取得最新 App Data 與排班`;
+wirePinGate();
+initPinGate();

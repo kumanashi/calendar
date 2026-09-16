@@ -5,16 +5,78 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#f3f3f1" />
   <meta name="description" content="個人排班日曆：GitHub Pages + Google Calendar + Drive App Data 同步" />
-  <meta name="roster-build" content="4.5.1" />
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
+  <meta name="googlebot" content="noindex, nofollow, nosnippet, noimageindex" />
+  <meta name="bingbot" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="roster-build" content="4.6" />
   <title>個人排班表</title>
-  <link rel="stylesheet" href="./styles.css?v=4.5.1" />
+  <link rel="stylesheet" href="./styles.css?v=4.6" />
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
-<body>
+<body class="app-locked">
+
+  <div class="pin-gate" id="pinGate" aria-live="polite">
+    <div class="pin-card">
+      <div class="pin-brand">
+        <div>
+          <p class="eyebrow">PRIVATE ROSTER</p>
+          <div class="title-row"><h1>個人排班表</h1><span class="version-badge">v4.6</span></div>
+        </div>
+        <span class="pin-lock-icon" aria-hidden="true">⌁</span>
+      </div>
+
+      <div id="pinGateLoading" class="pin-step">
+        <h2>載入安全設定</h2>
+        <p class="pin-copy">正在確認這台裝置是否已有 PIN 驗證資料。</p>
+      </div>
+
+      <form id="pinUnlockForm" class="pin-step hidden" autocomplete="off">
+        <h2>輸入 PIN</h2>
+        <p class="pin-copy">每次重新進入網頁都需要輸入 PIN 才能查看排班。</p>
+        <label>PIN
+          <input id="pinUnlockInput" type="password" inputmode="numeric" pattern="[0-9]*"
+                 maxlength="8" autocomplete="off" placeholder="4–8 位數字" />
+        </label>
+        <p class="pin-error hidden" id="pinUnlockError"></p>
+        <button class="btn dark pin-primary" type="submit">解鎖</button>
+      </form>
+
+      <div id="pinCloudStep" class="pin-step hidden">
+        <h2>取得 PIN 設定</h2>
+        <p class="pin-copy">這台裝置還沒有 PIN 驗證資料。請先連線同一個 Google 帳號，從 Drive App Data 取得設定。</p>
+        <label id="pinClientIdLabel" class="hidden">Google OAuth Client ID
+          <input id="pinClientIdInput" autocomplete="off" placeholder="xxxxxxxx.apps.googleusercontent.com" />
+        </label>
+        <p class="pin-error hidden" id="pinCloudError"></p>
+        <button class="btn dark pin-primary" id="pinLoadCloudBtn" type="button">連線 Google 並載入</button>
+      </div>
+
+      <form id="pinSetupForm" class="pin-step hidden" autocomplete="off">
+        <h2>首次設定 PIN</h2>
+        <p class="pin-copy">PIN 會加鹽雜湊後儲存在 Google Drive App Data，不會保存 PIN 明碼。</p>
+        <label>設定 PIN
+          <input id="pinSetupInput" type="password" inputmode="numeric" pattern="[0-9]*"
+                 maxlength="8" autocomplete="new-password" placeholder="4–8 位數字" />
+        </label>
+        <label>再次輸入 PIN
+          <input id="pinSetupConfirm" type="password" inputmode="numeric" pattern="[0-9]*"
+                 maxlength="8" autocomplete="new-password" placeholder="再次輸入" />
+        </label>
+        <p class="pin-error hidden" id="pinSetupError"></p>
+        <button class="btn dark pin-primary" type="submit">儲存 PIN 並進入</button>
+      </form>
+
+      <div class="pin-foot">
+        PIN 解鎖只保留在目前這次頁面中；重新整理或重新開啟後會再次要求輸入。
+      </div>
+    </div>
+  </div>
+
   <div class="app-shell">
     <header class="topbar">
       <div>
-<div class="title-row"><h1>個人排班表</h1><span class="version-badge">v4.5.1</span></div>
+<div class="title-row"><h1>個人排班表</h1><span class="version-badge">v4.6</span></div>
         <p class="subtle">排班、同步與每月收入預估</p>
       </div>
 
@@ -332,6 +394,6 @@
   </div>
 
   <div class="toast hidden" id="toast"></div>
-  <script src="./app.js?v=4.5.1"></script>
+  <script src="./app.js?v=4.6"></script>
 </body>
 </html>
