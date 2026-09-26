@@ -1,8 +1,8 @@
-# 個人排班行事曆 v4.8
+# 個人排班行事曆 v4.8.1
 
-v4.8 維持 v4.7.2 的核心架構：Google Calendar、Drive App Data、PIN、收入、批次刪除與固定排班均保留。
+v4.8.1 維持 v4.7.2 的核心架構：Google Calendar、Drive App Data、PIN、收入、批次刪除與固定排班均保留。
 
-## v4.8 變更
+## v4.8.1 變更
 
 1. 右下角「同步」改名為「設定」
    - 設定視窗標題也統一改成「設定」。
@@ -41,4 +41,11 @@ v4.8 維持 v4.7.2 的核心架構：Google Calendar、Drive App Data、PIN、�
 - robots.txt
 - .nojekyll
 
-v4.8 使用 `app.js?v=4.8` / `styles.css?v=4.8` 避免舊快取。
+v4.8.1 使用 `app.js?v=4.8` / `styles.css?v=4.8` 避免舊快取。
+
+
+## v4.8.1 修正
+
+- 修正 v4.8 遺漏 `timeRange()` helper，造成首頁第一次 `renderAll()` 即拋出 `ReferenceError`。
+- 此錯誤會讓後續 PIN submit handler 與首頁按鈕事件尚未綁定，因此正確 PIN 也無法解鎖。
+- 恢復 helper 後重新驗證 PIN、首頁按鈕、各 modal、批次刪除與設定內控制項。

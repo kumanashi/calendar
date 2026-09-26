@@ -1,4 +1,4 @@
-window.ROSTER_VERSION = '4.8';
+window.ROSTER_VERSION = '4.8.1';
 const $ = (id) => document.getElementById(id);
 const TZ = 'Asia/Taipei';
 const WEEKDAYS = ['週日','週一','週二','週三','週四','週五','週六'];
@@ -47,6 +47,7 @@ function monthKey(date = state.cursor) { return `${date.getFullYear()}-${String(
 function escapeHtml(s='') { return String(s).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
 function toNum(value) { const n = Number(value); return Number.isFinite(n) ? n : 0; }
 function money(value) { return `NT$ ${Math.round(toNum(value)).toLocaleString('zh-TW')}`; }
+function timeRange(s) { return `${s.start || ''}–${s.end || ''}`; }
 function localDate(dateStr, time='00:00') { return new Date(`${dateStr}T${time}:00+08:00`); }
 function nextDay(dateStr) {
   const d = new Date(`${dateStr}T00:00:00Z`); d.setUTCDate(d.getUTCDate()+1);
