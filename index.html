@@ -9,35 +9,25 @@
   <meta name="googlebot" content="noindex, nofollow, nosnippet, noimageindex" />
   <meta name="bingbot" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
   <meta name="referrer" content="no-referrer" />
-  <meta name="roster-build" content="4.7.2" />
+  <meta name="roster-build" content="4.8" />
   <title>個人排班表</title>
-  <link rel="stylesheet" href="./styles.css?v=4.7.2" />
+  <link rel="stylesheet" href="./styles.css?v=4.8" />
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body class="app-locked">
 
   <div class="pin-gate" id="pinGate" aria-live="polite">
     <div class="pin-card">
-      <div class="pin-brand">
-        <div>
-          <p class="eyebrow">PRIVATE ROSTER</p>
-          <div class="title-row"><h1>個人排班表</h1><span class="version-badge">v4.7.2</span></div>
-        </div>
-        <span class="pin-lock-icon" aria-hidden="true">⌁</span>
-      </div>
+      <div class="pin-brand pin-brand-simple"><h1>個人排班表</h1></div>
 
-      <div id="pinGateLoading" class="pin-step">
+      <div id="pinGateLoading" class="pin-step hidden">
         <h2>載入安全設定</h2>
         <p class="pin-copy">正在確認這台裝置是否已有 PIN 驗證資料。</p>
       </div>
 
-      <form id="pinUnlockForm" class="pin-step hidden" autocomplete="off">
-        <h2>輸入 PIN</h2>
-        <p class="pin-copy">每次重新進入網頁都需要輸入 PIN 才能查看排班。</p>
-        <label>PIN
-          <input id="pinUnlockInput" type="password" inputmode="numeric" pattern="[0-9]*"
-                 maxlength="8" autocomplete="off" placeholder="4–8 位數字" />
-        </label>
+      <form id="pinUnlockForm" class="pin-step pin-unlock-simple" autocomplete="off">
+        <input id="pinUnlockInput" type="password" inputmode="numeric" pattern="[0-9]*"
+               maxlength="8" autocomplete="off" placeholder="PIN" aria-label="PIN" />
         <p class="pin-error hidden" id="pinUnlockError"></p>
         <button class="btn dark pin-primary" type="submit">解鎖</button>
       </form>
@@ -66,18 +56,14 @@
         <p class="pin-error hidden" id="pinSetupError"></p>
         <button class="btn dark pin-primary" type="submit">儲存 PIN 並進入</button>
       </form>
-
-      <div class="pin-foot">
-        PIN 解鎖只保留在目前這次頁面中；重新整理或重新開啟後會再次要求輸入。
-      </div>
     </div>
   </div>
 
   <div class="app-shell">
     <header class="topbar">
       <div>
-<div class="title-row"><h1>個人排班表</h1><span class="version-badge">v4.7.2</span></div>
-        <p class="subtle">排班、同步與每月收入預估</p>
+<div class="title-row"><h1>個人排班表</h1><span class="version-badge">v4.8</span><span class="sync-indicator local" id="syncIndicator" title="本機快取" aria-label="本機快取"><span class="sync-indicator-icon" aria-hidden="true"></span></span></div>
+        <p class="subtle">排班、設定與每月收入預估</p>
       </div>
 
     </header>
@@ -153,7 +139,7 @@
     <button class="fab" id="addShiftBtn" type="button" title="新增單次排班">＋ 單次</button>
     <button class="fab" id="bulkShiftBtn" type="button" title="新增固定排班">↻ 固定</button>
     <button class="fab" id="batchDeleteBtn" type="button" title="批次刪除">☑ 批次刪除</button>
-    <button class="fab" id="settingsBtn" type="button" title="同步設定">⚙ 同步</button>
+    <button class="fab" id="settingsBtn" type="button" title="設定">⚙ 設定</button>
   </div>
 
   <div class="modal-backdrop hidden" id="shiftModal">
@@ -335,8 +321,8 @@
     <div class="modal settings-modal">
       <div class="modal-header">
         <div>
-          <p class="eyebrow">SYNC</p>
-          <h2>Google / Apple 同步設定</h2>
+          <p class="eyebrow">SETTINGS</p>
+          <h2>設定</h2>
         </div>
         <button class="icon-btn" type="button" data-close="settingsModal">×</button>
       </div>
@@ -360,19 +346,30 @@
       </div>
 
       <div class="settings-section">
-        <h3>診次顏色</h3>
-        <p>同一類診次統一使用相同顏色；修改後月曆與 Today 會立即套用。</p>
-        <div class="category-color-grid">
-          <label>早診 <input type="color" data-type-color="morning" /></label>
-          <label>午診 <input type="color" data-type-color="afternoon" /></label>
-          <label>晚診 <input type="color" data-type-color="evening" /></label>
-          <label>支援 <input type="color" data-type-color="support" /></label>
-          <label>健檢 <input type="color" data-type-color="health" /></label>
-          <label>月中 <input type="color" data-type-color="midmonth" /></label>
-          <label>疫苗 <input type="color" data-type-color="vaccine" /></label>
-          <label>其他 <input type="color" data-type-color="other" /></label>
+        <h3>診次種類與顏色</h3>
+        <p>可統一修改名稱與顏色，也可新增或刪除種類。仍有排班使用中的種類不可刪除。</p>
+        <div class="type-manager" id="typeManager"></div>
+        <div class="type-add-row">
+          <input id="newTypeName" placeholder="新增種類，例如：巡診" maxlength="20" />
+          <input id="newTypeColor" type="color" value="#64748b" aria-label="新增種類顏色" />
+          <button class="btn ghost compact" id="addTypeBtn" type="button">＋ 新增</button>
         </div>
       </div>
+<div class="settings-section">
+        <h3>背景圖片</h3>
+        <p>可上傳自己的背景圖片；圖片會先縮小壓縮，再存入 Google Drive App Data，並同步到其他裝置。</p>
+        <div class="background-setting-row">
+          <div class="background-thumb" id="backgroundThumb"><span>無背景圖片</span></div>
+          <div class="background-setting-actions">
+            <label class="btn ghost compact file-btn">選擇圖片
+              <input id="backgroundImageInput" type="file" accept="image/*" />
+            </label>
+            <button class="btn ghost compact" id="clearBackgroundBtn" type="button">移除背景</button>
+          </div>
+        </div>
+        <p class="field-note" id="backgroundStatus">建議使用橫向照片；系統會自動壓縮以避免 App Data 過大。</p>
+      </div>
+
       <div class="settings-section cloud-status-box">
         <div class="cloud-status-head">
           <h3>Drive App Data</h3>
@@ -388,7 +385,7 @@
       </div>
       <div class="modal-actions">
         <div class="spacer"></div>
-        <button class="btn dark" id="saveSettingsBtn" type="button">儲存並同步設定</button>
+        <button class="btn dark" id="saveSettingsBtn" type="button">儲存設定</button>
       </div>
     </div>
   </div>
@@ -397,6 +394,6 @@
   <datalist id="locationSuggestions"></datalist>
 
   <div class="toast hidden" id="toast"></div>
-  <script src="./app.js?v=4.7.2"></script>
+  <script src="./app.js?v=4.8"></script>
 </body>
 </html>

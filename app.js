@@ -1,4 +1,4 @@
-window.ROSTER_VERSION = '4.7.2';
+window.ROSTER_VERSION = '4.8';
 const $ = (id) => document.getElementById(id);
 const TZ = 'Asia/Taipei';
 const WEEKDAYS = ['週日','週一','週二','週三','週四','週五','週六'];
@@ -7,7 +7,7 @@ const OAUTH_SCOPES = 'https://www.googleapis.com/auth/calendar.events https://ww
 const PIN_VERIFIER_CACHE_KEY = 'roster_pin_verifier_v46';
 const PIN_ITERATIONS = 150000;
 
-const SHIFT_TYPES = {
+const DEFAULT_SHIFT_TYPES = {
   morning: '早診', afternoon: '午診', evening: '晚診', support: '支援',
   health: '健檢', midmonth: '月中', vaccine: '疫苗', other: '其他'
 };
@@ -31,7 +31,10 @@ const state = {
   selectedShiftIds: new Set(),
   pinUnlocked: false,
   pinCloudReady: false,
-  typeColors: { ...DEFAULT_TYPE_COLORS }
+  typeColors: { ...DEFAULT_TYPE_COLORS },
+  shiftTypes: { ...DEFAULT_SHIFT_TYPES },
+  pendingBackgroundImage: null,
+  syncSource: 'local'
 };
 
 function ymd(date) {
@@ -85,21 +88,55 @@ function closeModal(id) {
 }
 
 function normalizeType(type, session='') {
-  if (SHIFT_TYPES[type]) return type;
+  const raw = String(type || '').trim();
+  if (raw) return raw;
   const text = String(session || '').trim();
+  const matched = Object.entries({...DEFAULT_SHIFT_TYPES, ...(state.shiftTypes || {})})
+    .find(([,label]) => label === text);
+  if (matched) return matched[0];
   if (text.includes('早')) return 'morning';
   if (text.includes('午')) return 'afternoon';
   if (text.includes('晚')) return 'evening';
-  if (type === 'holiday' || type === 'support') return 'support';
   return 'other';
 }
-function typeLabel(shift) { return shift.type === 'other' && shift.customType ? shift.customType : (SHIFT_TYPES[shift.type] || '其他'); }
-function shiftColor(shift) { return state.typeColors[shift?.type] || state.typeColors.other || DEFAULT_TYPE_COLORS.other; }
-function timeRange(s) { return `${s.start}–${s.end}`; }
+function getShiftTypes() {
+  const types = state.shiftTypes && Object.keys(state.shiftTypes).length ? state.shiftTypes : DEFAULT_SHIFT_TYPES;
+  return {...types};
+}
+function typeLabel(shift) {
+  if (!shift) return '其他';
+  if (shift.type === 'other' && shift.customType) return shift.customType;
+  return getShiftTypes()[shift.type] || shift.session || shift.customType || DEFAULT_SHIFT_TYPES[shift.type] || '其他';
+}
+function shiftColor(shift) { return state.typeColors[shift?.type] || state.typeColors.other || '#6b7280'; }
+function populateTypeSelects(preferredType='') {
+  const types = getShiftTypes();
+  const options = Object.entries(types).map(([id,label]) => `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`).join('');
+  ['typeInput','bulkTypeInput'].forEach(id => {
+    const select = $(id);
+    if (!select) return;
+    const previous = id === 'typeInput' ? preferredType || select.value : select.value;
+    select.innerHTML = options;
+    if (previous && !types[previous]) {
+      const legacy = document.createElement('option');
+      legacy.value = previous;
+      legacy.textContent = previousTypeLabel(previous);
+      legacy.dataset.legacy = '1';
+      select.appendChild(legacy);
+    }
+    if (previous && [...select.options].some(o=>o.value===previous)) select.value = previous;
+    else if (select.options.length) select.value = select.options[0].value;
+  });
+}
+function previousTypeLabel(type) {
+  const shift = state.shifts.find(s => s.type === type);
+  return shift?.session || shift?.customType || DEFAULT_SHIFT_TYPES[type] || type || '其他';
+}
 function syncTypeUi(prefix='') {
   const bulk = prefix === 'bulk';
   const typeEl = $(bulk ? 'bulkTypeInput' : 'typeInput');
   const custom = $(bulk ? 'bulkCustomTypeLabel' : 'customTypeLabel');
+  if (!typeEl || !custom) return;
   custom.classList.toggle('hidden', typeEl.value !== 'other');
 }
 
@@ -110,6 +147,8 @@ function defaultCloudConfig() {
     calendarId: '',
     appleIcsUrl: '',
     typeColors: { ...DEFAULT_TYPE_COLORS },
+    shiftTypes: { ...DEFAULT_SHIFT_TYPES },
+    appearance: { backgroundImage: '' },
     incomeSettings: {},
     security: { pin: null },
     updatedAt: null
@@ -148,6 +187,8 @@ function mergeCloudConfig(input={}) {
     ...base,
     ...input,
     typeColors: { ...DEFAULT_TYPE_COLORS, ...(input.typeColors || {}) },
+    shiftTypes: input.shiftTypes && Object.keys(input.shiftTypes).length ? { ...input.shiftTypes } : { ...DEFAULT_SHIFT_TYPES },
+    appearance: { ...(base.appearance || {}), ...(input.appearance || {}) },
     incomeSettings: { ...(input.incomeSettings || {}) },
     security: { ...(base.security || {}), ...(input.security || {}) }
   };
@@ -159,16 +200,28 @@ function cacheCloudConfigLocally(config) {
     calendarId: config.calendarId || '',
     appleIcsUrl: config.appleIcsUrl || '',
     typeColors: config.typeColors || {},
+    shiftTypes: config.shiftTypes || {},
+    appearance: config.appearance || { backgroundImage: '' },
     incomeSettings: config.incomeSettings || {},
     updatedAt: config.updatedAt || null
   };
-  localStorage.setItem('roster_appdata_cache_v42', JSON.stringify(safeCache));
+  try {
+    localStorage.setItem('roster_appdata_cache_v42', JSON.stringify(safeCache));
+  } catch (err) {
+    // Large background images may exceed a browser's localStorage quota.
+    // Keep the cloud copy authoritative and cache everything except the image locally.
+    const fallback = { ...safeCache, appearance: { ...(safeCache.appearance||{}), backgroundImage: '' } };
+    try { localStorage.setItem('roster_appdata_cache_v42', JSON.stringify(fallback)); } catch {}
+  }
   if (config.googleClientId) localStorage.setItem('roster_google_client_id', config.googleClientId);
 }
 function applyCloudConfig(config) {
   state.cloudConfig = mergeCloudConfig(config);
   cachePinVerifierFromConfig(state.cloudConfig);
   state.typeColors = { ...state.cloudConfig.typeColors };
+  state.shiftTypes = { ...state.cloudConfig.shiftTypes };
+  applyBackground(state.cloudConfig.appearance?.backgroundImage || '');
+  populateTypeSelects();
   cacheCloudConfigLocally(state.cloudConfig);
   renderAll();
 }
@@ -185,6 +238,111 @@ function cacheKey() { return `roster_cache_${getCalendarId() || 'unset'}`; }
 function saveShiftCache() { localStorage.setItem(cacheKey(), JSON.stringify(state.shifts)); }
 function loadShiftCache() {
   try { state.shifts = JSON.parse(localStorage.getItem(cacheKey()) || '[]'); } catch { state.shifts = []; }
+}
+
+
+function setHeaderSyncIndicator(mode='local', label='') {
+  state.syncSource = mode === 'cloud' ? 'cloud' : 'local';
+  const el = $('syncIndicator');
+  if (!el) return;
+  const cloud = state.syncSource === 'cloud';
+  el.className = `sync-indicator ${cloud ? 'cloud' : 'local'}`;
+  const text = label || (cloud ? 'Google 已同步' : '本機快取');
+  el.title = text;
+  el.setAttribute('aria-label', text);
+}
+function applyBackground(dataUrl='') {
+  const body = document.body;
+  if (!body) return;
+  if (dataUrl) {
+    body.classList.add('has-custom-background');
+    body.style.setProperty('--roster-background-image', `url("${String(dataUrl).replace(/"/g,'\\"')}")`);
+  } else {
+    body.classList.remove('has-custom-background');
+    body.style.removeProperty('--roster-background-image');
+  }
+}
+function updateBackgroundPreview(dataUrl='') {
+  const thumb = $('backgroundThumb');
+  if (!thumb) return;
+  if (dataUrl) {
+    thumb.classList.add('has-image');
+    thumb.style.backgroundImage = `url("${String(dataUrl).replace(/"/g,'\\"')}")`;
+    thumb.innerHTML = '';
+  } else {
+    thumb.classList.remove('has-image');
+    thumb.style.backgroundImage = '';
+    thumb.innerHTML = '<span>無背景圖片</span>';
+  }
+}
+function compressBackgroundImage(file) {
+  return new Promise((resolve,reject)=>{
+    if (!file) return resolve('');
+    if (!file.type?.startsWith('image/')) return reject(new Error('請選擇圖片檔案'));
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('圖片讀取失敗'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('圖片格式無法讀取'));
+      img.onload = () => {
+        const maxW = 1800, maxH = 1350;
+        const scale = Math.min(1, maxW/img.width, maxH/img.height);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width*scale));
+        canvas.height = Math.max(1, Math.round(img.height*scale));
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img,0,0,canvas.width,canvas.height);
+        let data = canvas.toDataURL('image/jpeg',0.82);
+        // If still very large, retry at lower quality.
+        if (data.length > 1400000) data = canvas.toDataURL('image/jpeg',0.68);
+        resolve(data);
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function typeUsageCount(id) {
+  return state.shifts.filter(s => s.type === id).length;
+}
+function makeTypeId(label) {
+  const safe = String(label || '').trim().toLowerCase()
+    .replace(/\s+/g,'-')
+    .replace(/[^a-z0-9\u4e00-\u9fff_-]/g,'')
+    .slice(0,24);
+  let id = safe ? `custom_${safe}` : `custom_${Date.now()}`;
+  let n = 2;
+  while (getShiftTypes()[id]) id = `${id}_${n++}`;
+  return id;
+}
+function renderTypeManager() {
+  const host = $('typeManager');
+  if (!host) return;
+  const types = getShiftTypes();
+  host.innerHTML = Object.entries(types).map(([id,label]) => {
+    const count = typeUsageCount(id);
+    const color = state.typeColors[id] || '#6b7280';
+    return `<div class="type-manager-row" data-type-row="${escapeHtml(id)}">
+      <input class="type-name-input" data-type-name="${escapeHtml(id)}" value="${escapeHtml(label)}" maxlength="20" aria-label="${escapeHtml(label)}名稱" />
+      <input class="type-color-input" data-type-color="${escapeHtml(id)}" type="color" value="${escapeHtml(color)}" aria-label="${escapeHtml(label)}顏色" />
+      <span class="type-usage">${count ? `${count} 班` : '未使用'}</span>
+      <button class="icon-btn type-delete-btn" data-delete-type="${escapeHtml(id)}" type="button" title="刪除此種類">×</button>
+    </div>`;
+  }).join('');
+}
+function collectTypeSettings() {
+  const shiftTypes = {};
+  const typeColors = {};
+  document.querySelectorAll('[data-type-row]').forEach(row => {
+    const id = row.dataset.typeRow;
+    const label = row.querySelector('[data-type-name]')?.value.trim();
+    const color = row.querySelector('[data-type-color]')?.value || '#6b7280';
+    if (id && label) {
+      shiftTypes[id] = label;
+      typeColors[id] = color;
+    }
+  });
+  return { shiftTypes, typeColors };
 }
 
 function getFrequentShiftValues(field, limit=16) {
@@ -314,7 +472,7 @@ function deleteSelectedShifts() {
     try {
       await tryLoadAppDataConfig();
       const cal = getCalendarId();
-      if (!cal) throw new Error('請先在同步設定輸入排班 Calendar ID');
+      if (!cal) throw new Error('請先在設定輸入排班 Calendar ID');
 
       let done = 0;
       for (const shift of shifts) {
@@ -395,6 +553,7 @@ function openShiftModal(shift=null,date=null) {
   $('locationInput').value=shift?.location||'';
   $('dateInput').value=shift?.date||date||ymd(new Date());
   const type=normalizeType(shift?.type||'morning',shift?.session||'');
+  populateTypeSelects(type);
   $('typeInput').value=type;
   $('startInput').value=shift?.start||'09:00';
   $('endInput').value=shift?.end||'12:00';
@@ -429,7 +588,7 @@ function updateBulkPreview() {
 }
 function openBulkModal() {
   updateCommonSuggestions();
-  $('bulkForm').reset(); $('bulkTypeInput').value='evening'; $('bulkStartInput').value='18:00'; $('bulkEndInput').value='21:00';
+  $('bulkForm').reset(); populateTypeSelects(); const preferredBulk = getShiftTypes().evening ? 'evening' : Object.keys(getShiftTypes())[0]; $('bulkTypeInput').value=preferredBulk||''; $('bulkStartInput').value='18:00'; $('bulkEndInput').value='21:00';
   $('bulkRangePreset').value='2'; $('bulkFromInput').value=ymd(new Date());
   const todayWeekday=document.querySelector(`input[name="bulkWeekday"][value="${new Date().getDay()}"]`); if(todayWeekday) todayWeekday.checked=true;
   syncTypeUi('bulk'); updateBulkPreview(); openModal('bulkModal');
@@ -461,7 +620,7 @@ function googleEventToShift(ev) {
   return {
     id:ev.id, title:ev.summary||'(未命名班別)', location:ev.location||'', date,start,end,
     type:normalizeType(p.rosterType||'other',p.rosterSession||''), fee:toNum(p.rosterFee), ppf:toNum(p.rosterPpf),
-    session:p.rosterSession||'', customType:p.rosterCategoryLabel||'', note:ev.description||''
+    session:p.rosterSession||p.rosterCategoryLabel||'', customType:p.rosterCategoryLabel||'', note:ev.description||''
   };
 }
 function googleEventPayload(s) {
@@ -471,7 +630,7 @@ function googleEventPayload(s) {
     start:{dateTime:`${s.date}T${s.start}:00+08:00`,timeZone:TZ}, end:{dateTime:`${endDate}T${s.end}:00+08:00`,timeZone:TZ},
     extendedProperties:{private:{
       rosterType:s.type, rosterFee:String(toNum(s.fee)), rosterPpf:String(toNum(s.ppf)), rosterSession:typeLabel(s),
-      rosterCategoryLabel:s.type==='other'?(s.customType||''):'', rosterApp:'github-pages-roster-v4.2'
+      rosterCategoryLabel:typeLabel(s), rosterApp:'github-pages-roster-v4.8'
     }}
   };
 }
@@ -760,6 +919,7 @@ function setAppDataStatus(kind, message='') {
   link.classList.toggle('hidden', kind !== 'disabled');
 }
 function saveCloudConfigLocalOnly(config) {
+  setHeaderSyncIndicator('local','本機快取 · 尚待同步');
   const next = mergeCloudConfig({...config, updatedAt: new Date().toISOString()});
   applyCloudConfig(next);
   setAppDataStatus('cached', '設定已先保存在本機；Drive App Data 尚未同步。Calendar 排班不受影響。');
@@ -769,18 +929,21 @@ async function tryLoadAppDataConfig({force=false}={}) {
   setAppDataStatus('loading');
   try {
     const cfg = await loadAppDataConfig({force});
+    setHeaderSyncIndicator('cloud','Google 設定已同步');
     setAppDataStatus('ready', 'Drive App Data 已載入，跨裝置設定同步正常。');
     return { ok:true, config:cfg };
   } catch (err) {
     const info = classifyDriveError(err);
+    setHeaderSyncIndicator('local','本機快取');
     setAppDataStatus(info.kind, info.message);
     return { ok:false, error:err, info };
   }
 }
 async function trySaveAppDataConfig(config=state.cloudConfig) {
-  setAppDataStatus('loading', '正在同步設定到 Drive App Data…');
+  setAppDataStatus('loading', '正在儲存到 Drive App Data…');
   try {
     const cfg = await saveAppDataConfig(config);
+    setHeaderSyncIndicator('cloud','Google 已同步');
     setAppDataStatus('ready', '設定已同步至 Drive App Data。');
     return { ok:true, config:cfg };
   } catch (err) {
@@ -849,6 +1012,8 @@ async function loadAppDataConfig({force=false}={}) {
     if(!remote.calendarId) remote.calendarId=legacy.calendarId;
     if(!remote.appleIcsUrl) remote.appleIcsUrl=legacy.appleIcsUrl;
     remote.typeColors={...DEFAULT_TYPE_COLORS,...remote.typeColors};
+    if(!remote.shiftTypes||!Object.keys(remote.shiftTypes).length) remote.shiftTypes={...DEFAULT_SHIFT_TYPES};
+    remote.appearance={backgroundImage:'',...(remote.appearance||{})};
     remote.incomeSettings={...legacy.incomeSettings,...remote.incomeSettings};
     applyCloudConfig(remote); state.cloudLoaded=true;
     setAppDataStatus('ready', `已載入 Drive App Data${file.modifiedTime?` · ${new Date(file.modifiedTime).toLocaleString('zh-TW')}`:''}`);
@@ -877,13 +1042,13 @@ async function fetchAllEvents({refreshCloud=true}={}) {
     const data=await calendarRequest(`/calendars/${encodeURIComponent(calendarId)}/events?${qs}`); all.push(...(data.items||[])); pageToken=data.nextPageToken||'';
   } while(pageToken);
   state.shifts=all.map(googleEventToShift).filter(Boolean).sort((a,b)=>`${a.date}T${a.start}`.localeCompare(`${b.date}T${b.start}`));
-  saveShiftCache(); renderAll();
+  saveShiftCache(); setHeaderSyncIndicator('cloud','Google 已同步'); renderAll();
   $('syncStatus').textContent=`已連線 · ${state.shifts.length} 筆排班 · App Data 已同步 · ${new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})}`;
 }
 
 function initGoogleTokenClient() {
   const clientId=getBootstrapClientId();
-  if(!clientId) throw new Error('新裝置第一次使用，請先在同步設定輸入 Google OAuth Client ID');
+  if(!clientId) throw new Error('新裝置第一次使用，請先在設定輸入 Google OAuth Client ID');
   if(!window.google?.accounts?.oauth2) throw new Error('Google 登入元件尚未載入，請稍後再試');
   if(state.tokenClient) return;
   state.tokenClient=google.accounts.oauth2.initTokenClient({
@@ -906,7 +1071,7 @@ $('shiftForm').addEventListener('submit',(e)=>{
   e.preventDefault(); const id=$('shiftId').value;
   const payload={title:$('titleInput').value.trim(),location:$('locationInput').value.trim(),date:$('dateInput').value,type:$('typeInput').value,start:$('startInput').value,end:$('endInput').value,fee:toNum($('feeInput').value),ppf:toNum($('shiftPpfInput').value),customType:$('typeInput').value==='other'?$('customTypeInput').value.trim():'',note:$('noteInput').value.trim()};
   withGoogleAccess(async()=>{
-    await tryLoadAppDataConfig(); const cal=getCalendarId(); if(!cal) throw new Error('請先在同步設定輸入排班 Calendar ID');
+    await tryLoadAppDataConfig(); const cal=getCalendarId(); if(!cal) throw new Error('請先在設定輸入排班 Calendar ID');
     const path=`/calendars/${encodeURIComponent(cal)}/events${id?`/${encodeURIComponent(id)}`:''}`;
     await calendarRequest(path,{method:id?'PATCH':'POST',body:JSON.stringify(googleEventPayload(payload))});
     closeModal('shiftModal'); await fetchAllEvents(); showToast(id?'班表已更新':'班表已新增');
@@ -914,13 +1079,13 @@ $('shiftForm').addEventListener('submit',(e)=>{
 });
 $('deleteShiftBtn').onclick=()=>{
   const id=$('shiftId').value; if(!id||!confirm('確定刪除這個班別？Google Calendar 中的事件也會一起刪除。')) return;
-  withGoogleAccess(async()=>{await tryLoadAppDataConfig(); const cal=getCalendarId(); if(!cal) throw new Error('請先在同步設定輸入排班 Calendar ID'); await calendarRequest(`/calendars/${encodeURIComponent(cal)}/events/${encodeURIComponent(id)}`,{method:'DELETE'}); closeModal('shiftModal'); await fetchAllEvents(); showToast('班表已刪除');});
+  withGoogleAccess(async()=>{await tryLoadAppDataConfig(); const cal=getCalendarId(); if(!cal) throw new Error('請先在設定輸入排班 Calendar ID'); await calendarRequest(`/calendars/${encodeURIComponent(cal)}/events/${encodeURIComponent(id)}`,{method:'DELETE'}); closeModal('shiftModal'); await fetchAllEvents(); showToast('班表已刪除');});
 };
 $('bulkForm').addEventListener('submit',(e)=>{
   e.preventDefault(); const dates=bulkDates(); if(!dates.length){showToast('請選擇星期與有效的日期範圍');return;} if(dates.length>200){showToast('一次最多建立 200 班，請縮短日期範圍');return;}
   const base={title:$('bulkTitleInput').value.trim(),location:$('bulkLocationInput').value.trim(),type:$('bulkTypeInput').value,start:$('bulkStartInput').value,end:$('bulkEndInput').value,fee:toNum($('bulkFeeInput').value),ppf:toNum($('bulkPpfInput').value),customType:$('bulkTypeInput').value==='other'?$('bulkCustomTypeInput').value.trim():'',note:$('bulkNoteInput').value.trim()};
   withGoogleAccess(async()=>{
-    await tryLoadAppDataConfig(); const cal=getCalendarId(); if(!cal) throw new Error('請先在同步設定輸入排班 Calendar ID'); $('bulkSubmitBtn').disabled=true;
+    await tryLoadAppDataConfig(); const cal=getCalendarId(); if(!cal) throw new Error('請先在設定輸入排班 Calendar ID'); $('bulkSubmitBtn').disabled=true;
     try { for(let i=0;i<dates.length;i++){ $('bulkSubmitBtn').textContent=`建立中 ${i+1}/${dates.length}`; await calendarRequest(`/calendars/${encodeURIComponent(cal)}/events`,{method:'POST',body:JSON.stringify(googleEventPayload({...base,date:dates[i]}))}); } closeModal('bulkModal'); await fetchAllEvents(); showToast(`已建立 ${dates.length} 班固定排班`); }
     finally { $('bulkSubmitBtn').disabled=false; $('bulkSubmitBtn').textContent='建立固定排班'; }
   });
@@ -987,7 +1152,21 @@ $('googleSyncBtn').onclick=()=>withGoogleAccess(async()=>{
 });
 
 document.querySelectorAll('[data-close]').forEach(el=>el.onclick=()=>closeModal(el.dataset.close));
-document.querySelectorAll('.modal-backdrop').forEach(el=>el.addEventListener('click',e=>{if(e.target===el)closeModal(el.id);}));
+document.querySelectorAll('.modal-backdrop').forEach(el=>{
+  let backdropPress = null;
+  el.addEventListener('pointerdown',e=>{
+    if(e.target!==el){ backdropPress=null; return; }
+    backdropPress={id:e.pointerId,x:e.clientX,y:e.clientY};
+  });
+  el.addEventListener('pointerup',e=>{
+    if(!backdropPress||backdropPress.id!==e.pointerId){ backdropPress=null; return; }
+    const moved=Math.hypot(e.clientX-backdropPress.x,e.clientY-backdropPress.y);
+    const shouldClose=e.target===el&&moved<6;
+    backdropPress=null;
+    if(shouldClose) closeModal(el.id);
+  });
+  el.addEventListener('pointercancel',()=>{backdropPress=null;});
+});
 document.querySelectorAll('input[name="bulkWeekday"]').forEach(el=>el.addEventListener('change',updateBulkPreview));
 ['bulkRangePreset','bulkFromInput','bulkToInput'].forEach(id=>$(id).addEventListener('change',updateBulkPreview));
 ['licenseFeeInput','supportIncomeInput','insuranceCostInput'].forEach(id=>$(id).addEventListener('input',updateIncomeEquation));
@@ -998,7 +1177,13 @@ function openSettings() {
   $('googleClientId').value=getBootstrapClientId()||c.googleClientId||'';
   $('googleCalendarId').value=c.calendarId||'';
   $('appleIcsUrl').value=c.appleIcsUrl||'';
-  document.querySelectorAll('[data-type-color]').forEach(el=>el.value=(c.typeColors||DEFAULT_TYPE_COLORS)[el.dataset.typeColor]||DEFAULT_TYPE_COLORS[el.dataset.typeColor]);
+  state.shiftTypes={...(c.shiftTypes||DEFAULT_SHIFT_TYPES)};
+  state.typeColors={...DEFAULT_TYPE_COLORS,...(c.typeColors||{})};
+  state.pendingBackgroundImage=c.appearance?.backgroundImage||'';
+  renderTypeManager();
+  updateBackgroundPreview(state.pendingBackgroundImage);
+  $('backgroundImageInput').value='';
+  $('backgroundStatus').textContent=state.pendingBackgroundImage?'目前已設定背景圖片。選擇新圖片可直接替換。':'尚未設定背景圖片。';
   if(state.cloudLoaded) setAppDataStatus('ready','Drive App Data 已載入；儲存會同步到雲端。');
   else if(state.driveStatus==='idle') setAppDataStatus('cached','尚未載入雲端設定，目前使用本機快取；Calendar 排班仍可正常操作。');
   openModal('settingsModal');
@@ -1041,16 +1226,27 @@ $('saveSettingsBtn').onclick=()=>{
   if(oldClient&&oldClient!==clientId){
     state.tokenClient=null; state.googleToken=null; state.cloudLoaded=false; state.appDataFileId=null;
   }
+  const typeSettings=collectTypeSettings();
+  if(!Object.keys(typeSettings.shiftTypes).length){showToast('至少需要保留一種診次種類');return;}
   const draft={
     googleClientId:clientId,
     calendarId:$('googleCalendarId').value.trim(),
     appleIcsUrl:$('appleIcsUrl').value.trim(),
-    typeColors:{}
+    typeColors:typeSettings.typeColors,
+    shiftTypes:typeSettings.shiftTypes,
+    appearance:{backgroundImage:state.pendingBackgroundImage||''}
   };
-  document.querySelectorAll('[data-type-color]').forEach(el=>draft.typeColors[el.dataset.typeColor]=el.value);
-  const localNext=mergeCloudConfig({...state.cloudConfig,...draft,typeColors:{...(state.cloudConfig?.typeColors||{}),...draft.typeColors}});
+  const localNext=mergeCloudConfig({
+    ...state.cloudConfig,
+    ...draft,
+    incomeSettings:{...(state.cloudConfig?.incomeSettings||{})}
+  });
   saveCloudConfigLocalOnly(localNext);
   cleanupLegacyStorage();
+  state.shiftTypes={...localNext.shiftTypes};
+  state.typeColors={...localNext.typeColors};
+  applyBackground(localNext.appearance?.backgroundImage||'');
+  populateTypeSelects();
   closeModal('settingsModal');
   loadShiftCache(); renderAll();
   showToast('設定已儲存；正在嘗試同步 Drive App Data');
@@ -1061,13 +1257,63 @@ $('saveSettingsBtn').onclick=()=>{
     const next=mergeCloudConfig({
       ...remoteBase,
       ...draft,
-      incomeSettings:{...(remoteBase.incomeSettings||{}),...(localNext.incomeSettings||{})},
-      typeColors:{...(remoteBase.typeColors||{}),...draft.typeColors}
+      incomeSettings:{...(remoteBase.incomeSettings||{}),...(localNext.incomeSettings||{})}
     });
     const saved=await trySaveAppDataConfig(next);
-    if(saved.ok) showToast('同步設定已儲存到 Drive App Data');
+    if(saved.ok){ setHeaderSyncIndicator('cloud','Google 已同步'); showToast('設定已儲存到 Drive App Data'); }
   },{forceConsent:oldClient!==clientId});
 };
+
+$('addTypeBtn').onclick=()=>{
+  const label=$('newTypeName').value.trim();
+  if(!label){showToast('請輸入診次種類名稱');return;}
+  const current=collectTypeSettings();
+  if(Object.values(current.shiftTypes).some(v=>v===label)){showToast('已有相同名稱的診次種類');return;}
+  const id=makeTypeId(label);
+  state.shiftTypes={...current.shiftTypes,[id]:label};
+  state.typeColors={...current.typeColors,[id]:$('newTypeColor').value||'#64748b'};
+  $('newTypeName').value='';
+  renderTypeManager();
+};
+$('typeManager').addEventListener('click',(e)=>{
+  const btn=e.target.closest('[data-delete-type]');
+  if(!btn) return;
+  const id=btn.dataset.deleteType;
+  const usage=typeUsageCount(id);
+  if(usage){showToast(`此種類仍有 ${usage} 筆排班使用，請先修改那些班別`);return;}
+  const current=collectTypeSettings();
+  if(Object.keys(current.shiftTypes).length<=1){showToast('至少需要保留一種診次種類');return;}
+  delete current.shiftTypes[id];
+  delete current.typeColors[id];
+  state.shiftTypes=current.shiftTypes;
+  state.typeColors=current.typeColors;
+  renderTypeManager();
+});
+$('backgroundImageInput').addEventListener('change',async(e)=>{
+  const file=e.target.files?.[0];
+  if(!file) return;
+  $('backgroundStatus').textContent='正在處理圖片…';
+  try{
+    const data=await compressBackgroundImage(file);
+    if(data.length>1800000) throw new Error('圖片壓縮後仍太大，請改用較小的圖片');
+    state.pendingBackgroundImage=data;
+    updateBackgroundPreview(data);
+    applyBackground(data);
+    $('backgroundStatus').textContent='背景圖片已準備好，按「儲存設定」後同步到 Drive App Data。';
+  }catch(err){
+    $('backgroundStatus').textContent=err.message;
+    showToast(err.message);
+  }finally{
+    e.target.value='';
+  }
+});
+$('clearBackgroundBtn').onclick=()=>{
+  state.pendingBackgroundImage='';
+  updateBackgroundPreview('');
+  applyBackground('');
+  $('backgroundStatus').textContent='背景圖片已移除；按「儲存設定」後套用。';
+};
+
 $('retryAppDataBtn').onclick=()=>withGoogleAccess(async()=>{
   const result=await tryLoadAppDataConfig({force:true});
   if(result.ok){ renderAll(); showToast('Drive App Data 已載入'); }
@@ -1087,7 +1333,10 @@ $('appleSubscribeBtn').onclick=()=>{
 // Startup: use non-secret local cache for layout/income until Google App Data is loaded.
 state.cloudConfig=mergeCloudConfig(localMigrationConfig());
 state.typeColors={...state.cloudConfig.typeColors};
-loadShiftCache(); renderAll();
+state.shiftTypes={...state.cloudConfig.shiftTypes};
+applyBackground(state.cloudConfig.appearance?.backgroundImage||'');
+populateTypeSelects();
+loadShiftCache(); setHeaderSyncIndicator('local','本機快取'); renderAll();
 setAppDataStatus('cached','尚未載入 Drive App Data，目前使用本機快取；Calendar 排班可獨立操作。');
 if(getBootstrapClientId()) $('syncStatus').textContent=`顯示本機快取 · ${state.shifts.length} 筆；按「連線 Google Calendar」取得最新 App Data 與排班`;
 wirePinGate();

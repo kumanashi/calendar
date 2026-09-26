@@ -457,3 +457,80 @@ a.btn,
 .pin-step{
   pointer-events:auto;
 }
+
+
+/* v4.8 — settings, background, sync source */
+.sync-indicator{
+  width:25px;height:25px;border-radius:999px;border:1px solid var(--line);
+  display:inline-grid;place-items:center;flex:0 0 25px;background:#f4f4f2;color:#777872;
+}
+.sync-indicator-icon{width:13px;height:13px;position:relative;display:block}
+.sync-indicator.local .sync-indicator-icon{
+  border:1.6px solid currentColor;border-radius:3px;
+}
+.sync-indicator.local .sync-indicator-icon::before{
+  content:'';position:absolute;left:2px;right:2px;top:3px;border-top:1.6px solid currentColor;
+}
+.sync-indicator.local .sync-indicator-icon::after{
+  content:'';position:absolute;width:3px;height:3px;border-radius:50%;background:currentColor;left:4px;bottom:2px;
+}
+.sync-indicator.cloud{color:#456a55;background:#eef5f0;border-color:#d4e5d8}
+.sync-indicator.cloud .sync-indicator-icon::before{
+  content:'☁';position:absolute;inset:-5px -4px;font-size:17px;line-height:17px;font-family:Arial,sans-serif;
+}
+
+body.has-custom-background{
+  background-image:
+    linear-gradient(rgba(242,242,239,.48),rgba(242,242,239,.48)),
+    var(--roster-background-image);
+  background-size:cover;
+  background-position:center;
+  background-attachment:fixed;
+}
+body.has-custom-background .card{
+  background:rgba(251,251,250,.90);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+}
+body.has-custom-background .floating-actions{
+  background:rgba(251,251,250,.86);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+}
+
+.background-setting-row{display:grid;grid-template-columns:150px 1fr;gap:14px;align-items:center;margin-top:12px}
+.background-thumb{
+  height:92px;border:1px dashed var(--line-dark);border-radius:12px;background:#f6f6f3;
+  display:grid;place-items:center;background-size:cover;background-position:center;overflow:hidden;color:var(--muted);font-size:11px;
+}
+.background-thumb.has-image{border-style:solid}
+.background-setting-actions{display:flex;gap:8px;flex-wrap:wrap}
+.file-btn{position:relative;overflow:hidden;cursor:pointer}
+.file-btn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+
+.type-manager{display:grid;gap:8px;margin-top:12px}
+.type-manager-row{
+  display:grid;grid-template-columns:minmax(120px,1fr) 44px 58px 38px;gap:8px;align-items:center;
+  padding:8px;border:1px solid var(--line);border-radius:11px;background:#fafafa;
+}
+.type-manager-row input{margin:0}
+.type-name-input{font-size:13px}
+.type-color-input{width:38px!important;height:34px;padding:2px!important;border:0!important;background:transparent!important}
+.type-usage{font-size:10px;color:var(--muted);text-align:center}
+.type-delete-btn{width:34px;height:34px;font-size:18px;color:var(--danger)}
+.type-add-row{display:grid;grid-template-columns:1fr 44px auto;gap:8px;align-items:center;margin-top:10px}
+.type-add-row input[type=color]{width:40px;height:36px;padding:2px}
+
+.pin-brand-simple{margin-bottom:18px;justify-content:flex-start}
+.pin-brand-simple h1{margin:0;font-size:24px}
+.pin-unlock-simple{display:grid;gap:12px}
+.pin-unlock-simple input{font-size:22px;text-align:center;letter-spacing:.24em;padding:13px}
+.pin-unlock-simple .pin-primary{margin-top:0}
+
+@media(max-width:560px){
+  .background-setting-row{grid-template-columns:1fr}
+  .background-thumb{height:120px}
+  .type-manager-row{grid-template-columns:minmax(0,1fr) 42px 48px 34px}
+  .type-add-row{grid-template-columns:minmax(0,1fr) 42px}
+  .type-add-row .btn{grid-column:1/-1}
+}
