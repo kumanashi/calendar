@@ -416,3 +416,44 @@ body.app-locked > .toast{
   .pin-gate{padding:14px}
   .pin-card{padding:20px;border-radius:18px}
 }
+
+
+/* v4.7 — motion + common suggestions */
+.modal-backdrop:not(.hidden){
+  opacity:0;
+  transition:opacity 180ms ease;
+}
+.modal-backdrop.modal-visible{opacity:1}
+.modal-backdrop.modal-closing{opacity:0;pointer-events:none !important}
+.modal-backdrop .modal{
+  opacity:0;
+  transform:translateY(12px) scale(.985);
+  transition:opacity 180ms ease, transform 180ms cubic-bezier(.2,.8,.2,1);
+  transform-origin:50% 45%;
+}
+.modal-backdrop.modal-visible .modal{opacity:1;transform:translateY(0) scale(1)}
+.modal-backdrop.modal-closing .modal{opacity:0;transform:translateY(7px) scale(.99)}
+.calendar-grid,.income-card{will-change:transform,opacity}
+.btn,.fab,.icon-btn,.event-chip,.today-shift,.day-add{
+  transition:transform 120ms ease, background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease, opacity 150ms ease;
+}
+.btn:active,.fab:active,.icon-btn:active,.event-chip:active,.today-shift:active,.day-add:active{transform:scale(.975)}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{scroll-behavior:auto !important;animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important}
+}
+
+
+/* v4.7.1 — interaction hardening */
+button,
+a.btn,
+.pin-gate button,
+.modal button,
+.floating-actions button{
+  pointer-events:auto;
+  touch-action:manipulation;
+}
+.pin-gate,
+.pin-card,
+.pin-step{
+  pointer-events:auto;
+}

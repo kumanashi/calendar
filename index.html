@@ -9,9 +9,9 @@
   <meta name="googlebot" content="noindex, nofollow, nosnippet, noimageindex" />
   <meta name="bingbot" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
   <meta name="referrer" content="no-referrer" />
-  <meta name="roster-build" content="4.6" />
+  <meta name="roster-build" content="4.7.2" />
   <title>個人排班表</title>
-  <link rel="stylesheet" href="./styles.css?v=4.6" />
+  <link rel="stylesheet" href="./styles.css?v=4.7.2" />
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body class="app-locked">
@@ -21,7 +21,7 @@
       <div class="pin-brand">
         <div>
           <p class="eyebrow">PRIVATE ROSTER</p>
-          <div class="title-row"><h1>個人排班表</h1><span class="version-badge">v4.6</span></div>
+          <div class="title-row"><h1>個人排班表</h1><span class="version-badge">v4.7.2</span></div>
         </div>
         <span class="pin-lock-icon" aria-hidden="true">⌁</span>
       </div>
@@ -76,7 +76,7 @@
   <div class="app-shell">
     <header class="topbar">
       <div>
-<div class="title-row"><h1>個人排班表</h1><span class="version-badge">v4.6</span></div>
+<div class="title-row"><h1>個人排班表</h1><span class="version-badge">v4.7.2</span></div>
         <p class="subtle">排班、同步與每月收入預估</p>
       </div>
 
@@ -168,10 +168,10 @@
       <input type="hidden" id="shiftId" />
       <div class="form-grid">
         <label class="full">班別名稱
-          <input id="titleInput" required placeholder="例如：愛林診所 晚診" />
+          <input id="titleInput" list="titleSuggestions" required placeholder="例如：愛林診所 晚診" autocomplete="off" />
         </label>
         <label class="full">地點 / 診所
-          <input id="locationInput" placeholder="例如：愛林診所" />
+          <input id="locationInput" list="locationSuggestions" placeholder="例如：愛林診所" autocomplete="off" />
         </label>
         <label>日期
           <input id="dateInput" type="date" required />
@@ -228,10 +228,10 @@
       </div>
       <div class="form-grid">
         <label class="full">班別名稱
-          <input id="bulkTitleInput" required placeholder="例如：愛林診所 晚診" />
+          <input id="bulkTitleInput" list="titleSuggestions" required placeholder="例如：愛林診所 晚診" autocomplete="off" />
         </label>
         <label>地點 / 診所
-          <input id="bulkLocationInput" placeholder="例如：愛林診所" />
+          <input id="bulkLocationInput" list="locationSuggestions" placeholder="例如：愛林診所" autocomplete="off" />
         </label>
         <label>類別
           <select id="bulkTypeInput">
@@ -393,7 +393,10 @@
     </div>
   </div>
 
+  <datalist id="titleSuggestions"></datalist>
+  <datalist id="locationSuggestions"></datalist>
+
   <div class="toast hidden" id="toast"></div>
-  <script src="./app.js?v=4.6"></script>
+  <script src="./app.js?v=4.7.2"></script>
 </body>
 </html>

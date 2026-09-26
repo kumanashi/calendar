@@ -9,8 +9,8 @@
   <meta name="googlebot" content="noindex, nofollow, nosnippet, noimageindex" />
   <meta name="bingbot" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
   <meta name="referrer" content="no-referrer" />
-  <meta name="roster-build" content="4.6" />
-  <title>個人排班表 v4.6 預覽</title>
+  <meta name="roster-build" content="4.7.2" />
+  <title>個人排班表 v4.7.2 預覽</title>
   <style>:root {
   --bg: #f1f1ef;
   --surface: #fbfbfa;
@@ -429,6 +429,47 @@ body.app-locked > .toast{
   .pin-gate{padding:14px}
   .pin-card{padding:20px;border-radius:18px}
 }
+
+
+/* v4.7 — motion + common suggestions */
+.modal-backdrop:not(.hidden){
+  opacity:0;
+  transition:opacity 180ms ease;
+}
+.modal-backdrop.modal-visible{opacity:1}
+.modal-backdrop.modal-closing{opacity:0;pointer-events:none !important}
+.modal-backdrop .modal{
+  opacity:0;
+  transform:translateY(12px) scale(.985);
+  transition:opacity 180ms ease, transform 180ms cubic-bezier(.2,.8,.2,1);
+  transform-origin:50% 45%;
+}
+.modal-backdrop.modal-visible .modal{opacity:1;transform:translateY(0) scale(1)}
+.modal-backdrop.modal-closing .modal{opacity:0;transform:translateY(7px) scale(.99)}
+.calendar-grid,.income-card{will-change:transform,opacity}
+.btn,.fab,.icon-btn,.event-chip,.today-shift,.day-add{
+  transition:transform 120ms ease, background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease, opacity 150ms ease;
+}
+.btn:active,.fab:active,.icon-btn:active,.event-chip:active,.today-shift:active,.day-add:active{transform:scale(.975)}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{scroll-behavior:auto !important;animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important}
+}
+
+
+/* v4.7.1 — interaction hardening */
+button,
+a.btn,
+.pin-gate button,
+.modal button,
+.floating-actions button{
+  pointer-events:auto;
+  touch-action:manipulation;
+}
+.pin-gate,
+.pin-card,
+.pin-step{
+  pointer-events:auto;
+}
 </style>
   
 </head>
@@ -439,7 +480,7 @@ body.app-locked > .toast{
       <div class="pin-brand">
         <div>
           <p class="eyebrow">PRIVATE ROSTER</p>
-          <div class="title-row"><h1>個人排班表</h1><span class="version-badge">v4.6</span></div>
+          <div class="title-row"><h1>個人排班表</h1><span class="version-badge">v4.7.2</span></div>
         </div>
         <span class="pin-lock-icon" aria-hidden="true">⌁</span>
       </div>
@@ -494,7 +535,7 @@ body.app-locked > .toast{
   <div class="app-shell">
     <header class="topbar">
       <div>
-<div class="title-row"><h1>個人排班表</h1><span class="version-badge">v4.6</span></div>
+<div class="title-row"><h1>個人排班表</h1><span class="version-badge">v4.7.2</span></div>
         <p class="subtle">排班、同步與每月收入預估</p>
       </div>
 
@@ -586,10 +627,10 @@ body.app-locked > .toast{
       <input type="hidden" id="shiftId" />
       <div class="form-grid">
         <label class="full">班別名稱
-          <input id="titleInput" required placeholder="例如：愛林診所 晚診" />
+          <input id="titleInput" list="titleSuggestions" required placeholder="例如：愛林診所 晚診" autocomplete="off" />
         </label>
         <label class="full">地點 / 診所
-          <input id="locationInput" placeholder="例如：愛林診所" />
+          <input id="locationInput" list="locationSuggestions" placeholder="例如：愛林診所" autocomplete="off" />
         </label>
         <label>日期
           <input id="dateInput" type="date" required />
@@ -646,10 +687,10 @@ body.app-locked > .toast{
       </div>
       <div class="form-grid">
         <label class="full">班別名稱
-          <input id="bulkTitleInput" required placeholder="例如：愛林診所 晚診" />
+          <input id="bulkTitleInput" list="titleSuggestions" required placeholder="例如：愛林診所 晚診" autocomplete="off" />
         </label>
         <label>地點 / 診所
-          <input id="bulkLocationInput" placeholder="例如：愛林診所" />
+          <input id="bulkLocationInput" list="locationSuggestions" placeholder="例如：愛林診所" autocomplete="off" />
         </label>
         <label>類別
           <select id="bulkTypeInput">
@@ -811,16 +852,47 @@ body.app-locked > .toast{
     </div>
   </div>
 
+  <datalist id="titleSuggestions"></datalist>
+  <datalist id="locationSuggestions"></datalist>
+
   <div class="toast hidden" id="toast"></div>
   
+
+
+<script>
+(function () {
+  try {
+    const probe = '__roster_preview_probe__';
+    window.localStorage.setItem(probe, '1');
+    window.localStorage.removeItem(probe);
+  } catch (err) {
+    let mem = Object.create(null);
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem(key) {
+          key = String(key);
+          return Object.prototype.hasOwnProperty.call(mem, key) ? mem[key] : null;
+        },
+        setItem(key, value) { mem[String(key)] = String(value); },
+        removeItem(key) { delete mem[String(key)]; },
+        clear() { mem = Object.create(null); },
+        key(index) { return Object.keys(mem)[index] ?? null; },
+        get length() { return Object.keys(mem).length; }
+      }
+    });
+  }
+})();
+</script>
 
 <script>
 localStorage.setItem('roster_google_client_id', "720414757752-demo.apps.googleusercontent.com");
 localStorage.setItem('roster_appdata_cache_v42', "{\"schemaVersion\": 2, \"googleClientId\": \"720414757752-demo.apps.googleusercontent.com\", \"calendarId\": \"demo@group.calendar.google.com\", \"appleIcsUrl\": \"https://calendar.google.com/calendar/ical/DEMO/basic.ics\", \"typeColors\": {\"morning\": \"#64748b\", \"afternoon\": \"#a16207\", \"evening\": \"#475569\", \"support\": \"#0f766e\", \"health\": \"#7c3aed\", \"midmonth\": \"#b45309\", \"vaccine\": \"#0369a1\", \"other\": \"#6b7280\"}, \"incomeSettings\": {\"2026-09\": {\"license\": 30000, \"support\": 8000, \"insurance\": 3500}}}");
-localStorage.setItem('roster_cache_demo@group.calendar.google.com', "[{\"id\": \"demo1\", \"title\": \"\u611b\u6797\u8a3a\u6240 \u65e9\u8a3a\", \"location\": \"\u58eb\u6797\", \"date\": \"2026-09-16\", \"type\": \"morning\", \"start\": \"09:00\", \"end\": \"12:00\", \"fee\": 6500, \"ppf\": 1200, \"customType\": \"\", \"note\": \"\"}, {\"id\": \"demo2\", \"title\": \"\u611b\u6797\u8a3a\u6240 \u665a\u8a3a\", \"location\": \"\u8606\u6d32\", \"date\": \"2026-09-16\", \"type\": \"evening\", \"start\": \"18:00\", \"end\": \"21:00\", \"fee\": 7000, \"ppf\": 1500, \"customType\": \"\", \"note\": \"\"}, {\"id\": \"demo3\", \"title\": \"\u5065\u6aa2\u652f\u63f4\", \"location\": \"\u58eb\u6797\", \"date\": \"2026-09-18\", \"type\": \"health\", \"start\": \"08:30\", \"end\": \"11:30\", \"fee\": 5500, \"ppf\": 0, \"customType\": \"\", \"note\": \"\"}]");
-localStorage.setItem('roster_pin_verifier_v46', "{\"algorithm\": \"PBKDF2-SHA256\", \"salt\": \"AAECAwQFBgcICQoLDA0ODw==\", \"hash\": \"Rokalk4nWpjGPWT2jSILA1EtLB3bYOHTUEEZRGZ2dng=\", \"iterations\": 150000, \"updatedAt\": \"2026-09-16T00:00:00.000Z\"}");
+localStorage.setItem('roster_cache_demo@group.calendar.google.com', "[{\"id\": \"d1\", \"title\": \"\u611b\u6797\u8a3a\u6240 \u65e9\u8a3a\", \"location\": \"\u611b\u6797\u8a3a\u6240\", \"date\": \"2026-09-26\", \"type\": \"morning\", \"start\": \"09:00\", \"end\": \"12:00\", \"fee\": 6500, \"ppf\": 1000, \"customType\": \"\", \"note\": \"\"}, {\"id\": \"d2\", \"title\": \"\u611b\u6797\u8606\u6d32 \u665a\u8a3a\", \"location\": \"\u611b\u6797\u8606\u6d32\", \"date\": \"2026-09-26\", \"type\": \"evening\", \"start\": \"18:00\", \"end\": \"21:00\", \"fee\": 7000, \"ppf\": 1500, \"customType\": \"\", \"note\": \"\"}, {\"id\": \"d3\", \"title\": \"\u611b\u6797\u8a3a\u6240 \u65e9\u8a3a\", \"location\": \"\u611b\u6797\u8a3a\u6240\", \"date\": \"2026-09-28\", \"type\": \"morning\", \"start\": \"09:00\", \"end\": \"12:00\", \"fee\": 6500, \"ppf\": 900, \"customType\": \"\", \"note\": \"\"}, {\"id\": \"d4\", \"title\": \"\u611b\u6797\u8606\u6d32 \u665a\u8a3a\", \"location\": \"\u611b\u6797\u8606\u6d32\", \"date\": \"2026-09-29\", \"type\": \"evening\", \"start\": \"18:00\", \"end\": \"21:00\", \"fee\": 7000, \"ppf\": 1400, \"customType\": \"\", \"note\": \"\"}, {\"id\": \"d5\", \"title\": \"\u75ab\u82d7\u9580\u8a3a\", \"location\": \"\u611b\u6797\u8a3a\u6240\", \"date\": \"2026-10-02\", \"type\": \"vaccine\", \"start\": \"14:00\", \"end\": \"17:00\", \"fee\": 6000, \"ppf\": 800, \"customType\": \"\", \"note\": \"\"}]");
+localStorage.setItem('roster_pin_verifier_v46', "{\"algorithm\": \"PREVIEW\", \"salt\": \"preview\", \"hash\": \"preview\", \"iterations\": 1, \"updatedAt\": \"2026-09-26T00:00:00.000Z\"}");
 </script>
-<script>window.ROSTER_VERSION = '4.6';
+<script>
+window.ROSTER_VERSION = '4.7.2';
 const $ = (id) => document.getElementById(id);
 const TZ = 'Asia/Taipei';
 const WEEKDAYS = ['週日','週一','週二','週三','週四','週五','週六'];
@@ -875,18 +947,35 @@ function showToast(message) {
   const el = $('toast'); el.textContent = message; el.classList.remove('hidden');
   clearTimeout(showToast._t); showToast._t = setTimeout(() => el.classList.add('hidden'), 3000);
 }
+const MODAL_TRANSITION_MS = 180;
 function openModal(id) {
   document.querySelectorAll('.modal-backdrop').forEach(el => {
-    if (el.id !== id) el.classList.add('hidden');
+    if (el.id !== id) {
+      el.classList.add('hidden');
+      el.classList.remove('modal-visible','modal-closing');
+    }
   });
-  $(id).classList.remove('hidden');
+  const target = $(id);
+  clearTimeout(target._closeTimer);
+  target.classList.remove('hidden','modal-closing');
   document.body.classList.add('modal-open');
+  requestAnimationFrame(() => requestAnimationFrame(() => target.classList.add('modal-visible')));
 }
 function closeModal(id) {
-  $(id).classList.add('hidden');
-  if (![...document.querySelectorAll('.modal-backdrop')].some(el => !el.classList.contains('hidden'))) {
-    document.body.classList.remove('modal-open');
-  }
+  const target = $(id);
+  if (!target || target.classList.contains('hidden')) return;
+  clearTimeout(target._closeTimer);
+  target.classList.remove('modal-visible');
+  target.classList.add('modal-closing');
+  const finish = () => {
+    target.classList.add('hidden');
+    target.classList.remove('modal-closing');
+    if (![...document.querySelectorAll('.modal-backdrop')].some(el => !el.classList.contains('hidden'))) {
+      document.body.classList.remove('modal-open');
+    }
+  };
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) finish();
+  else target._closeTimer = setTimeout(finish, MODAL_TRANSITION_MS);
 }
 
 function normalizeType(type, session='') {
@@ -990,6 +1079,25 @@ function cacheKey() { return `roster_cache_${getCalendarId() || 'unset'}`; }
 function saveShiftCache() { localStorage.setItem(cacheKey(), JSON.stringify(state.shifts)); }
 function loadShiftCache() {
   try { state.shifts = JSON.parse(localStorage.getItem(cacheKey()) || '[]'); } catch { state.shifts = []; }
+}
+
+function getFrequentShiftValues(field, limit=16) {
+  const counts = new Map();
+  for (const shift of state.shifts) {
+    const value = String(shift?.[field] || '').trim();
+    if (!value) continue;
+    counts.set(value, (counts.get(value) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a,b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh-Hant'))
+    .slice(0, limit)
+    .map(([value]) => value);
+}
+function updateCommonSuggestions() {
+  const titleList = $('titleSuggestions');
+  const locationList = $('locationSuggestions');
+  if (titleList) titleList.innerHTML = getFrequentShiftValues('title').map(value => `<option value="${escapeHtml(value)}"></option>`).join('');
+  if (locationList) locationList.innerHTML = getFrequentShiftValues('location').map(value => `<option value="${escapeHtml(value)}"></option>`).join('');
 }
 
 function renderToday() {
@@ -1151,7 +1259,7 @@ function renderCalendar() {
   $('calendarGrid').innerHTML=cells.join('');
 }
 
-function renderAll() { renderToday(); renderCalendar(); renderIncome(); wireDynamic(); }
+function renderAll() { renderToday(); renderCalendar(); renderIncome(); updateCommonSuggestions(); wireDynamic(); }
 function wireDynamic() {
   document.querySelectorAll('[data-edit]').forEach(el=>el.onclick=()=>{
     const shift=state.shifts.find(s=>s.id===el.dataset.edit);
@@ -1173,6 +1281,7 @@ function wireDynamic() {
 }
 
 function openShiftModal(shift=null,date=null) {
+  updateCommonSuggestions();
   $('shiftForm').reset();
   $('shiftId').value=shift?.id||'';
   $('shiftModalTitle').textContent=shift?'編輯排班':'新增單次排班';
@@ -1213,6 +1322,7 @@ function updateBulkPreview() {
   $('bulkPreview').innerHTML=dates.length?`預計建立 <strong>${dates.length}</strong> 班：${dates.slice(0,4).join('、')}${dates.length>4?`… 到 ${dates.at(-1)}`:''}`:'請選擇星期與期間。';
 }
 function openBulkModal() {
+  updateCommonSuggestions();
   $('bulkForm').reset(); $('bulkTypeInput').value='evening'; $('bulkStartInput').value='18:00'; $('bulkEndInput').value='21:00';
   $('bulkRangePreset').value='2'; $('bulkFromInput').value=ymd(new Date());
   const todayWeekday=document.querySelector(`input[name="bulkWeekday"][value="${new Date().getDay()}"]`); if(todayWeekday) todayWeekday.checked=true;
@@ -1727,9 +1837,34 @@ $('incomeForm').addEventListener('submit',(e)=>{
   });
 });
 
-$('prevMonth').onclick=()=>{state.cursor=new Date(state.cursor.getFullYear(),state.cursor.getMonth()-1,1);renderCalendar();renderIncome();wireDynamic();};
-$('nextMonth').onclick=()=>{state.cursor=new Date(state.cursor.getFullYear(),state.cursor.getMonth()+1,1);renderCalendar();renderIncome();wireDynamic();};
-$('todayBtn').onclick=()=>{state.cursor=new Date();renderCalendar();renderIncome();wireDynamic();};
+function animateMonthChange(direction, updateCursor) {
+  const grid = $('calendarGrid');
+  const income = document.querySelector('.income-card');
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduceMotion || !grid?.animate) {
+    updateCursor(); renderCalendar(); renderIncome(); wireDynamic(); return;
+  }
+  const sign = direction === 'next' ? -1 : 1;
+  const outgoing = [grid, income].filter(Boolean).map((el, index) => el.animate([
+    {opacity:1, transform:'translateX(0)'},
+    {opacity:0, transform:`translateX(${sign * 18}px)`}
+  ], {duration:120, easing:'ease-in', fill:'forwards', delay:index*10}));
+  Promise.all(outgoing.map(a => a.finished.catch(()=>{}))).then(() => {
+    updateCursor();
+    renderCalendar(); renderIncome(); wireDynamic();
+    [grid, income].filter(Boolean).forEach((el,index) => {
+      el.getAnimations().forEach(a=>a.cancel());
+      el.animate([
+        {opacity:0, transform:`translateX(${-sign * 18}px)`},
+        {opacity:1, transform:'translateX(0)'}
+      ], {duration:190, easing:'cubic-bezier(.2,.8,.2,1)', fill:'both', delay:index*12});
+    });
+  });
+}
+
+$('prevMonth').onclick=()=>animateMonthChange('prev',()=>{state.cursor=new Date(state.cursor.getFullYear(),state.cursor.getMonth()-1,1);});
+$('nextMonth').onclick=()=>animateMonthChange('next',()=>{state.cursor=new Date(state.cursor.getFullYear(),state.cursor.getMonth()+1,1);});
+$('todayBtn').onclick=()=>animateMonthChange(state.cursor > new Date() ? 'prev' : 'next',()=>{state.cursor=new Date();});
 $('addShiftBtn').onclick=()=>openShiftModal(); $('bulkShiftBtn').onclick=openBulkModal; $('incomeSettingsBtn').onclick=openIncomeModal;
 $('refreshBtn').onclick=()=>withGoogleAccess(async()=>{await tryLoadAppDataConfig({force:true});await fetchAllEvents({refreshCloud:false});});
 $('googleSyncBtn').onclick=()=>withGoogleAccess(async()=>{
@@ -1851,24 +1986,116 @@ setAppDataStatus('cached','尚未載入 Drive App Data，目前使用本機快�
 if(getBootstrapClientId()) $('syncStatus').textContent=`顯示本機快取 · ${state.shifts.length} 筆；按「連線 Google Calendar」取得最新 App Data 與排班`;
 wirePinGate();
 initPinGate();
+
 </script>
 <script>
 try {
-  state.cursor = new Date(2026,8,1);
+  // Preview PIN is intentionally sandbox-safe and does not depend on Web Crypto.
+  verifyPin = async function(pin) { return String(pin) === '2468'; };
+
+  state.cursor = new Date(2026, 8, 1);
   state.cloudLoaded = true;
   setAppDataStatus('ready','預覽模式：Drive App Data 已同步');
-  $('syncStatus').textContent='預覽模式 · Google Calendar 已同步 · 3 筆排班 · App Data 已同步';
+  $('syncStatus').textContent='預覽模式 · Google Calendar 已同步 · 5 筆排班 · App Data 已同步';
   renderAll();
+
   const note=document.createElement('div');
   note.className='pin-preview-note';
   note.textContent='預覽 PIN：2468';
   document.querySelector('.pin-card')?.appendChild(note);
-  const previewOnly=(msg)=>(e)=>{if(e)e.preventDefault();showToast(msg);};
-  $('googleSyncBtn').onclick=previewOnly('預覽模式：正式版會同步 Google Calendar 與 App Data');
-  $('refreshBtn').onclick=previewOnly('預覽模式：正式版會重新整理 Google Calendar');
-  $('retryAppDataBtn').onclick=previewOnly('預覽模式：Drive App Data 正常');
-  $('reauthDriveBtn').onclick=previewOnly('預覽模式：正式版會重新要求 Google 授權');
-}catch(e){console.error(e)}
+
+  // Preview-safe network actions.
+  $('googleSyncBtn').onclick=(e)=>{e.preventDefault();showToast('預覽：Google Calendar 同步按鈕正常');};
+  $('refreshBtn').onclick=(e)=>{e.preventDefault();showToast('預覽：重新整理按鈕正常');};
+  $('appleSubscribeBtn').onclick=(e)=>{e.preventDefault();showToast('預覽：Apple Calendar 訂閱按鈕正常');};
+  $('retryAppDataBtn').onclick=(e)=>{e.preventDefault();setAppDataStatus('ready','預覽模式：App Data 已重新載入');showToast('預覽：App Data 按鈕正常');};
+  $('reauthDriveBtn').onclick=(e)=>{e.preventDefault();showToast('預覽：重新授權按鈕正常');};
+  $('enableDriveApiLink').addEventListener('click',(e)=>{e.preventDefault();showToast('預覽：Drive API 連結正常');});
+
+  // Preview-safe single shift save/delete.
+  $('shiftForm').addEventListener('submit',(e)=>{
+    e.preventDefault(); e.stopImmediatePropagation();
+    const id=$('shiftId').value || ('preview-' + Date.now());
+    const payload={
+      id,
+      title:$('titleInput').value.trim()||'示範班別',
+      location:$('locationInput').value.trim(),
+      date:$('dateInput').value,
+      type:$('typeInput').value,
+      start:$('startInput').value,
+      end:$('endInput').value,
+      fee:toNum($('feeInput').value),
+      ppf:toNum($('shiftPpfInput').value),
+      customType:$('typeInput').value==='other'?$('customTypeInput').value.trim():'',
+      note:$('noteInput').value.trim()
+    };
+    const idx=state.shifts.findIndex(s=>s.id===id);
+    if(idx>=0) state.shifts[idx]=payload; else state.shifts.push(payload);
+    closeModal('shiftModal'); renderAll();
+    showToast(idx>=0?'預覽：班表已更新':'預覽：班表已新增');
+  }, true);
+
+  $('deleteShiftBtn').addEventListener('click',(e)=>{
+    e.preventDefault(); e.stopImmediatePropagation();
+    const id=$('shiftId').value;
+    if(id) state.shifts=state.shifts.filter(s=>s.id!==id);
+    closeModal('shiftModal'); renderAll(); showToast('預覽：班表已刪除');
+  }, true);
+
+  // Preview-safe bulk creation.
+  $('bulkForm').addEventListener('submit',(e)=>{
+    e.preventDefault(); e.stopImmediatePropagation();
+    const dates=bulkDates();
+    const base={
+      title:$('bulkTitleInput').value.trim()||'示範固定班',
+      location:$('bulkLocationInput').value.trim(),
+      type:$('bulkTypeInput').value,
+      start:$('bulkStartInput').value,
+      end:$('bulkEndInput').value,
+      fee:toNum($('bulkFeeInput').value),
+      ppf:toNum($('bulkPpfInput').value),
+      customType:$('bulkTypeInput').value==='other'?$('bulkCustomTypeInput').value.trim():'',
+      note:$('bulkNoteInput').value.trim()
+    };
+    dates.slice(0,30).forEach((date,i)=>state.shifts.push({...base,date,id:'bulk-preview-'+Date.now()+'-'+i}));
+    closeModal('bulkModal'); renderAll();
+    showToast(`預覽：已建立 ${Math.min(dates.length,30)} 班固定排班`);
+  }, true);
+
+  // Preview-safe income/settings.
+  $('incomeForm').addEventListener('submit',(e)=>{
+    e.preventDefault(); e.stopImmediatePropagation();
+    const key=monthKey();
+    state.cloudConfig.incomeSettings={
+      ...(state.cloudConfig.incomeSettings||{}),
+      [key]:{
+        license:toNum($('licenseFeeInput').value),
+        support:toNum($('supportIncomeInput').value),
+        insurance:toNum($('insuranceCostInput').value)
+      }
+    };
+    closeModal('incomeModal'); renderIncome(); showToast('預覽：本月收入設定已儲存');
+  }, true);
+
+  $('saveSettingsBtn').addEventListener('click',(e)=>{
+    e.preventDefault(); e.stopImmediatePropagation();
+    document.querySelectorAll('[data-type-color]').forEach(el=>state.typeColors[el.dataset.typeColor]=el.value);
+    closeModal('settingsModal'); renderAll(); showToast('預覽：同步設定已儲存');
+  }, true);
+
+  // Preview-safe batch delete.
+  deleteSelectedShifts = function() {
+    const ids=[...state.selectedShiftIds];
+    state.shifts=state.shifts.filter(s=>!state.selectedShiftIds.has(s.id));
+    state.selectedShiftIds.clear();
+    state.batchDeleteMode=false;
+    document.body.classList.remove('batch-delete-mode');
+    renderAll(); updateBatchDeleteButton();
+    showToast(`預覽：已刪除 ${ids.length} 筆事件`);
+  };
+} catch(e) {
+  console.error(e);
+}
 </script>
 <style>
 .pin-preview-note{margin-top:12px;padding:9px 11px;border-radius:10px;background:#f3f3f0;color:#555751;text-align:center;font-size:11px;font-weight:800}

@@ -1,4 +1,4 @@
-window.ROSTER_VERSION = '4.6';
+window.ROSTER_VERSION = '4.7.2';
 const $ = (id) => document.getElementById(id);
 const TZ = 'Asia/Taipei';
 const WEEKDAYS = ['週日','週一','週二','週三','週四','週五','週六'];
@@ -53,18 +53,35 @@ function showToast(message) {
   const el = $('toast'); el.textContent = message; el.classList.remove('hidden');
   clearTimeout(showToast._t); showToast._t = setTimeout(() => el.classList.add('hidden'), 3000);
 }
+const MODAL_TRANSITION_MS = 180;
 function openModal(id) {
   document.querySelectorAll('.modal-backdrop').forEach(el => {
-    if (el.id !== id) el.classList.add('hidden');
+    if (el.id !== id) {
+      el.classList.add('hidden');
+      el.classList.remove('modal-visible','modal-closing');
+    }
   });
-  $(id).classList.remove('hidden');
+  const target = $(id);
+  clearTimeout(target._closeTimer);
+  target.classList.remove('hidden','modal-closing');
   document.body.classList.add('modal-open');
+  requestAnimationFrame(() => requestAnimationFrame(() => target.classList.add('modal-visible')));
 }
 function closeModal(id) {
-  $(id).classList.add('hidden');
-  if (![...document.querySelectorAll('.modal-backdrop')].some(el => !el.classList.contains('hidden'))) {
-    document.body.classList.remove('modal-open');
-  }
+  const target = $(id);
+  if (!target || target.classList.contains('hidden')) return;
+  clearTimeout(target._closeTimer);
+  target.classList.remove('modal-visible');
+  target.classList.add('modal-closing');
+  const finish = () => {
+    target.classList.add('hidden');
+    target.classList.remove('modal-closing');
+    if (![...document.querySelectorAll('.modal-backdrop')].some(el => !el.classList.contains('hidden'))) {
+      document.body.classList.remove('modal-open');
+    }
+  };
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) finish();
+  else target._closeTimer = setTimeout(finish, MODAL_TRANSITION_MS);
 }
 
 function normalizeType(type, session='') {
@@ -168,6 +185,25 @@ function cacheKey() { return `roster_cache_${getCalendarId() || 'unset'}`; }
 function saveShiftCache() { localStorage.setItem(cacheKey(), JSON.stringify(state.shifts)); }
 function loadShiftCache() {
   try { state.shifts = JSON.parse(localStorage.getItem(cacheKey()) || '[]'); } catch { state.shifts = []; }
+}
+
+function getFrequentShiftValues(field, limit=16) {
+  const counts = new Map();
+  for (const shift of state.shifts) {
+    const value = String(shift?.[field] || '').trim();
+    if (!value) continue;
+    counts.set(value, (counts.get(value) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a,b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh-Hant'))
+    .slice(0, limit)
+    .map(([value]) => value);
+}
+function updateCommonSuggestions() {
+  const titleList = $('titleSuggestions');
+  const locationList = $('locationSuggestions');
+  if (titleList) titleList.innerHTML = getFrequentShiftValues('title').map(value => `<option value="${escapeHtml(value)}"></option>`).join('');
+  if (locationList) locationList.innerHTML = getFrequentShiftValues('location').map(value => `<option value="${escapeHtml(value)}"></option>`).join('');
 }
 
 function renderToday() {
@@ -329,7 +365,7 @@ function renderCalendar() {
   $('calendarGrid').innerHTML=cells.join('');
 }
 
-function renderAll() { renderToday(); renderCalendar(); renderIncome(); wireDynamic(); }
+function renderAll() { renderToday(); renderCalendar(); renderIncome(); updateCommonSuggestions(); wireDynamic(); }
 function wireDynamic() {
   document.querySelectorAll('[data-edit]').forEach(el=>el.onclick=()=>{
     const shift=state.shifts.find(s=>s.id===el.dataset.edit);
@@ -351,6 +387,7 @@ function wireDynamic() {
 }
 
 function openShiftModal(shift=null,date=null) {
+  updateCommonSuggestions();
   $('shiftForm').reset();
   $('shiftId').value=shift?.id||'';
   $('shiftModalTitle').textContent=shift?'編輯排班':'新增單次排班';
@@ -391,6 +428,7 @@ function updateBulkPreview() {
   $('bulkPreview').innerHTML=dates.length?`預計建立 <strong>${dates.length}</strong> 班：${dates.slice(0,4).join('、')}${dates.length>4?`… 到 ${dates.at(-1)}`:''}`:'請選擇星期與期間。';
 }
 function openBulkModal() {
+  updateCommonSuggestions();
   $('bulkForm').reset(); $('bulkTypeInput').value='evening'; $('bulkStartInput').value='18:00'; $('bulkEndInput').value='21:00';
   $('bulkRangePreset').value='2'; $('bulkFromInput').value=ymd(new Date());
   const todayWeekday=document.querySelector(`input[name="bulkWeekday"][value="${new Date().getDay()}"]`); if(todayWeekday) todayWeekday.checked=true;
@@ -905,9 +943,34 @@ $('incomeForm').addEventListener('submit',(e)=>{
   });
 });
 
-$('prevMonth').onclick=()=>{state.cursor=new Date(state.cursor.getFullYear(),state.cursor.getMonth()-1,1);renderCalendar();renderIncome();wireDynamic();};
-$('nextMonth').onclick=()=>{state.cursor=new Date(state.cursor.getFullYear(),state.cursor.getMonth()+1,1);renderCalendar();renderIncome();wireDynamic();};
-$('todayBtn').onclick=()=>{state.cursor=new Date();renderCalendar();renderIncome();wireDynamic();};
+function animateMonthChange(direction, updateCursor) {
+  const grid = $('calendarGrid');
+  const income = document.querySelector('.income-card');
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduceMotion || !grid?.animate) {
+    updateCursor(); renderCalendar(); renderIncome(); wireDynamic(); return;
+  }
+  const sign = direction === 'next' ? -1 : 1;
+  const outgoing = [grid, income].filter(Boolean).map((el, index) => el.animate([
+    {opacity:1, transform:'translateX(0)'},
+    {opacity:0, transform:`translateX(${sign * 18}px)`}
+  ], {duration:120, easing:'ease-in', fill:'forwards', delay:index*10}));
+  Promise.all(outgoing.map(a => a.finished.catch(()=>{}))).then(() => {
+    updateCursor();
+    renderCalendar(); renderIncome(); wireDynamic();
+    [grid, income].filter(Boolean).forEach((el,index) => {
+      el.getAnimations().forEach(a=>a.cancel());
+      el.animate([
+        {opacity:0, transform:`translateX(${-sign * 18}px)`},
+        {opacity:1, transform:'translateX(0)'}
+      ], {duration:190, easing:'cubic-bezier(.2,.8,.2,1)', fill:'both', delay:index*12});
+    });
+  });
+}
+
+$('prevMonth').onclick=()=>animateMonthChange('prev',()=>{state.cursor=new Date(state.cursor.getFullYear(),state.cursor.getMonth()-1,1);});
+$('nextMonth').onclick=()=>animateMonthChange('next',()=>{state.cursor=new Date(state.cursor.getFullYear(),state.cursor.getMonth()+1,1);});
+$('todayBtn').onclick=()=>animateMonthChange(state.cursor > new Date() ? 'prev' : 'next',()=>{state.cursor=new Date();});
 $('addShiftBtn').onclick=()=>openShiftModal(); $('bulkShiftBtn').onclick=openBulkModal; $('incomeSettingsBtn').onclick=openIncomeModal;
 $('refreshBtn').onclick=()=>withGoogleAccess(async()=>{await tryLoadAppDataConfig({force:true});await fetchAllEvents({refreshCloud:false});});
 $('googleSyncBtn').onclick=()=>withGoogleAccess(async()=>{
