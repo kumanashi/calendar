@@ -534,3 +534,96 @@ body.has-custom-background .floating-actions{
   .type-add-row{grid-template-columns:minmax(0,1fr) 42px}
   .type-add-row .btn{grid-column:1/-1}
 }
+
+
+/* v4.9 — no accidental zoom + overflow hardening */
+html{
+  width:100%;
+  max-width:100%;
+  overflow-x:hidden;
+  -webkit-text-size-adjust:100%;
+  text-size-adjust:100%;
+}
+body{
+  width:100%;
+  max-width:100%;
+  overflow-x:hidden;
+  overscroll-behavior-x:none;
+}
+*,*::before,*::after{box-sizing:border-box;min-width:0}
+img,svg,canvas{max-width:100%}
+input,select,textarea,button{max-width:100%;font-size:16px}
+.modal-backdrop{padding:max(12px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left))}
+.modal{
+  width:min(560px,calc(100vw - 20px));
+  max-width:calc(100vw - 20px);
+  max-height:calc(100dvh - 24px);
+  overflow-y:auto;
+  overflow-x:hidden;
+}
+.modal.wide,.settings-modal,.stats-modal{width:min(820px,calc(100vw - 20px));max-width:calc(100vw - 20px)}
+.compact-modal{width:min(390px,calc(100vw - 20px))}
+.form-grid>*{min-width:0}
+.form-grid input,.form-grid select,.form-grid textarea{width:100%}
+.modal-actions{position:sticky;bottom:-1px;background:linear-gradient(to top,var(--surface,#fff) 76%,rgba(255,255,255,0));padding-top:14px;z-index:3;flex-wrap:wrap}
+.modal-actions .spacer{min-width:0}
+.floating-actions{max-width:calc(100vw - 20px);overflow-x:auto;scrollbar-width:none}
+.floating-actions::-webkit-scrollbar{display:none}
+.income-heading-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+
+/* income statistics */
+.stats-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:6px 0 16px}
+.stat-kpi{border:1px solid var(--line);border-radius:12px;background:#fafaf8;padding:12px;display:grid;gap:6px}
+.stat-kpi span{font-size:10px;color:var(--muted);font-weight:700}
+.stat-kpi strong{font-size:16px;overflow-wrap:anywhere}
+.stats-section{border-top:1px solid var(--line);padding-top:16px;margin-top:16px}
+.stats-section h3{margin:0;font-size:14px}
+.stats-section-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}
+.stats-section-head span{font-size:10px;color:var(--muted);text-align:right}
+.fee-distribution,.income-ratio-list{display:grid;gap:10px}
+.fee-dist-row,.ratio-row{display:grid;gap:6px}
+.fee-dist-label,.ratio-label{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.fee-dist-label strong,.ratio-label strong{font-size:12px}
+.fee-dist-label span,.ratio-label span{font-size:11px;color:var(--muted)}
+.stat-bar{height:7px;border-radius:999px;background:#ecece8;overflow:hidden}
+.stat-bar i{display:block;height:100%;min-width:0;border-radius:inherit;background:#5e625d}
+.ratio-row.cost .stat-bar i{background:#9b6868}
+.income-chart-wrap{width:100%;overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:#fafaf8;padding:8px}
+.income-history-chart{display:block;width:max(680px,100%);height:auto}
+.chart-grid{stroke:#e3e3df;stroke-width:1}
+.chart-axis{font-size:10px;fill:#858680}
+.chart-line{fill:none;stroke:#555954;stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}
+.chart-dot{fill:#fff;stroke:#555954;stroke-width:2.5}
+.chart-empty{font-size:12px;fill:#858680}
+.chart-legend{display:flex;gap:8px;overflow-x:auto;padding:8px 2px 2px}
+.chart-legend span{min-width:92px;border:1px solid var(--line);border-radius:9px;padding:7px;background:#fafaf8;font-size:10px;display:grid;gap:3px}
+.chart-legend b{font-size:10px}
+.compact-empty{padding:14px;text-align:center}
+
+@media(max-width:720px){
+  .stats-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .section-heading.wrap{align-items:flex-start}
+  .income-heading-actions{width:100%;justify-content:flex-start}
+}
+@media(max-width:520px){
+  .app-shell{width:100%;padding-left:10px;padding-right:10px}
+  .modal{width:calc(100vw - 16px);max-width:calc(100vw - 16px);max-height:calc(100dvh - 16px);border-radius:16px}
+  .modal-backdrop{padding:8px}
+  .form-grid{grid-template-columns:1fr!important}
+  .form-grid .full{grid-column:auto!important}
+  .modal-header{gap:8px}
+  .modal-header h2{font-size:18px}
+  .modal-lead{font-size:11px}
+  .modal-actions{gap:8px}
+  .modal-actions .btn{flex:1 1 auto}
+  .weekday-checks{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .settings-section{overflow:hidden}
+  .background-setting-row,.type-add-row{grid-template-columns:1fr!important}
+  .type-manager-row{grid-template-columns:minmax(0,1fr) 42px 48px 34px!important}
+  .sync-actions{width:100%;display:grid;grid-template-columns:1fr}
+  .sync-actions .btn{width:100%}
+  .stats-kpis{grid-template-columns:1fr 1fr}
+  .fee-dist-label,.ratio-label{align-items:flex-start}
+  .fee-dist-label strong,.fee-dist-label span,.ratio-label span,.ratio-label strong{overflow-wrap:anywhere}
+  .income-history-chart{width:640px}
+}

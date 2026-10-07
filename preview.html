@@ -2,15 +2,15 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#f3f3f1" />
   <meta name="description" content="個人排班日曆：GitHub Pages + Google Calendar + Drive App Data 同步" />
   <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
   <meta name="googlebot" content="noindex, nofollow, nosnippet, noimageindex" />
   <meta name="bingbot" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
   <meta name="referrer" content="no-referrer" />
-  <meta name="roster-build" content="4.8.1" />
-  <title>個人排班表 v4.8.1 預覽</title>
+  <meta name="roster-build" content="4.9" />
+  <title>個人排班表 v4.9 預覽</title>
   <style>:root {
   --bg: #f1f1ef;
   --surface: #fbfbfa;
@@ -547,6 +547,99 @@ body.has-custom-background .floating-actions{
   .type-add-row{grid-template-columns:minmax(0,1fr) 42px}
   .type-add-row .btn{grid-column:1/-1}
 }
+
+
+/* v4.9 — no accidental zoom + overflow hardening */
+html{
+  width:100%;
+  max-width:100%;
+  overflow-x:hidden;
+  -webkit-text-size-adjust:100%;
+  text-size-adjust:100%;
+}
+body{
+  width:100%;
+  max-width:100%;
+  overflow-x:hidden;
+  overscroll-behavior-x:none;
+}
+*,*::before,*::after{box-sizing:border-box;min-width:0}
+img,svg,canvas{max-width:100%}
+input,select,textarea,button{max-width:100%;font-size:16px}
+.modal-backdrop{padding:max(12px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left))}
+.modal{
+  width:min(560px,calc(100vw - 20px));
+  max-width:calc(100vw - 20px);
+  max-height:calc(100dvh - 24px);
+  overflow-y:auto;
+  overflow-x:hidden;
+}
+.modal.wide,.settings-modal,.stats-modal{width:min(820px,calc(100vw - 20px));max-width:calc(100vw - 20px)}
+.compact-modal{width:min(390px,calc(100vw - 20px))}
+.form-grid>*{min-width:0}
+.form-grid input,.form-grid select,.form-grid textarea{width:100%}
+.modal-actions{position:sticky;bottom:-1px;background:linear-gradient(to top,var(--surface,#fff) 76%,rgba(255,255,255,0));padding-top:14px;z-index:3;flex-wrap:wrap}
+.modal-actions .spacer{min-width:0}
+.floating-actions{max-width:calc(100vw - 20px);overflow-x:auto;scrollbar-width:none}
+.floating-actions::-webkit-scrollbar{display:none}
+.income-heading-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+
+/* income statistics */
+.stats-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:6px 0 16px}
+.stat-kpi{border:1px solid var(--line);border-radius:12px;background:#fafaf8;padding:12px;display:grid;gap:6px}
+.stat-kpi span{font-size:10px;color:var(--muted);font-weight:700}
+.stat-kpi strong{font-size:16px;overflow-wrap:anywhere}
+.stats-section{border-top:1px solid var(--line);padding-top:16px;margin-top:16px}
+.stats-section h3{margin:0;font-size:14px}
+.stats-section-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}
+.stats-section-head span{font-size:10px;color:var(--muted);text-align:right}
+.fee-distribution,.income-ratio-list{display:grid;gap:10px}
+.fee-dist-row,.ratio-row{display:grid;gap:6px}
+.fee-dist-label,.ratio-label{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.fee-dist-label strong,.ratio-label strong{font-size:12px}
+.fee-dist-label span,.ratio-label span{font-size:11px;color:var(--muted)}
+.stat-bar{height:7px;border-radius:999px;background:#ecece8;overflow:hidden}
+.stat-bar i{display:block;height:100%;min-width:0;border-radius:inherit;background:#5e625d}
+.ratio-row.cost .stat-bar i{background:#9b6868}
+.income-chart-wrap{width:100%;overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:#fafaf8;padding:8px}
+.income-history-chart{display:block;width:max(680px,100%);height:auto}
+.chart-grid{stroke:#e3e3df;stroke-width:1}
+.chart-axis{font-size:10px;fill:#858680}
+.chart-line{fill:none;stroke:#555954;stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}
+.chart-dot{fill:#fff;stroke:#555954;stroke-width:2.5}
+.chart-empty{font-size:12px;fill:#858680}
+.chart-legend{display:flex;gap:8px;overflow-x:auto;padding:8px 2px 2px}
+.chart-legend span{min-width:92px;border:1px solid var(--line);border-radius:9px;padding:7px;background:#fafaf8;font-size:10px;display:grid;gap:3px}
+.chart-legend b{font-size:10px}
+.compact-empty{padding:14px;text-align:center}
+
+@media(max-width:720px){
+  .stats-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .section-heading.wrap{align-items:flex-start}
+  .income-heading-actions{width:100%;justify-content:flex-start}
+}
+@media(max-width:520px){
+  .app-shell{width:100%;padding-left:10px;padding-right:10px}
+  .modal{width:calc(100vw - 16px);max-width:calc(100vw - 16px);max-height:calc(100dvh - 16px);border-radius:16px}
+  .modal-backdrop{padding:8px}
+  .form-grid{grid-template-columns:1fr!important}
+  .form-grid .full{grid-column:auto!important}
+  .modal-header{gap:8px}
+  .modal-header h2{font-size:18px}
+  .modal-lead{font-size:11px}
+  .modal-actions{gap:8px}
+  .modal-actions .btn{flex:1 1 auto}
+  .weekday-checks{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .settings-section{overflow:hidden}
+  .background-setting-row,.type-add-row{grid-template-columns:1fr!important}
+  .type-manager-row{grid-template-columns:minmax(0,1fr) 42px 48px 34px!important}
+  .sync-actions{width:100%;display:grid;grid-template-columns:1fr}
+  .sync-actions .btn{width:100%}
+  .stats-kpis{grid-template-columns:1fr 1fr}
+  .fee-dist-label,.ratio-label{align-items:flex-start}
+  .fee-dist-label strong,.fee-dist-label span,.ratio-label span,.ratio-label strong{overflow-wrap:anywhere}
+  .income-history-chart{width:640px}
+}
 </style>
   
 </head>
@@ -598,7 +691,7 @@ body.has-custom-background .floating-actions{
   <div class="app-shell">
     <header class="topbar">
       <div>
-<div class="title-row"><h1>個人排班表</h1><span class="version-badge">v4.8.1</span><span class="sync-indicator local" id="syncIndicator" title="本機快取" aria-label="本機快取"><span class="sync-indicator-icon" aria-hidden="true"></span></span></div>
+<div class="title-row"><h1>個人排班表</h1><span class="version-badge">v4.9</span><span class="sync-indicator local" id="syncIndicator" title="本機快取" aria-label="本機快取"><span class="sync-indicator-icon" aria-hidden="true"></span></span></div>
         <p class="subtle">排班、設定與每月收入預估</p>
       </div>
 
@@ -640,7 +733,10 @@ body.has-custom-background .floating-actions{
             <p class="eyebrow">ESTIMATED INCOME</p>
             <h2 id="incomeTitle">本月預估收入</h2>
           </div>
-          <button class="btn ghost compact" id="incomeSettingsBtn" type="button">設定本月收入項目</button>
+          <div class="income-heading-actions">
+            <button class="btn ghost compact" id="incomeStatsBtn" type="button">收入統計</button>
+            <button class="btn ghost compact" id="incomeSettingsBtn" type="button">設定本月收入項目</button>
+          </div>
         </div>
         <div class="income-summary">
           <div class="income-main">
@@ -853,6 +949,76 @@ body.has-custom-background .floating-actions{
     </form>
   </div>
 
+
+
+  <div class="modal-backdrop hidden" id="incomeStatsModal">
+    <div class="modal wide stats-modal">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">INCOME STATISTICS</p>
+          <h2 id="incomeStatsTitle">收入統計</h2>
+        </div>
+        <button class="icon-btn" type="button" data-close="incomeStatsModal">×</button>
+      </div>
+
+      <div class="stats-kpis">
+        <div class="stat-kpi"><span>實際上班天數</span><strong id="statWorkDays">0 天</strong></div>
+        <div class="stat-kpi"><span>總班數</span><strong id="statShiftCount">0 節</strong></div>
+        <div class="stat-kpi"><span>總時數</span><strong id="statWorkHours">0 小時</strong></div>
+        <div class="stat-kpi"><span>平均每工作日</span><strong id="statAvgDaily">NT$ 0</strong></div>
+      </div>
+
+      <section class="stats-section">
+        <div class="stats-section-head">
+          <h3>節費分布</h3>
+          <span id="statFeeSummary"></span>
+        </div>
+        <div class="fee-distribution" id="feeDistribution"></div>
+      </section>
+
+      <section class="stats-section">
+        <h3>收入項目比例</h3>
+        <div class="income-ratio-list" id="incomeRatioList"></div>
+      </section>
+
+      <section class="stats-section">
+        <div class="stats-section-head">
+          <h3>歷月預估收入</h3>
+          <span>依目前已同步的排班與每月收入設定計算</span>
+        </div>
+        <div class="income-chart-wrap">
+          <svg id="incomeHistoryChart" class="income-history-chart" viewBox="0 0 720 260" role="img" aria-label="歷月預估收入折線圖"></svg>
+        </div>
+        <div class="chart-legend" id="incomeHistoryLegend"></div>
+      </section>
+
+      <div class="modal-actions">
+        <div class="spacer"></div>
+        <button class="btn dark" type="button" data-close="incomeStatsModal">關閉</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="settingsPinModal">
+    <form class="modal compact-modal" id="settingsPinForm" autocomplete="off">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">SECURITY</p>
+          <h2>輸入 PIN</h2>
+        </div>
+        <button class="icon-btn" type="button" data-close="settingsPinModal">×</button>
+      </div>
+      <input id="settingsPinInput" type="password" inputmode="numeric" pattern="[0-9]*"
+             maxlength="8" autocomplete="off" placeholder="PIN" aria-label="PIN" />
+      <p class="pin-error hidden" id="settingsPinError"></p>
+      <div class="modal-actions">
+        <div class="spacer"></div>
+        <button class="btn ghost" type="button" data-close="settingsPinModal">取消</button>
+        <button class="btn dark" type="submit">進入設定</button>
+      </div>
+    </form>
+  </div>
+
   <div class="modal-backdrop hidden" id="settingsModal">
     <div class="modal settings-modal">
       <div class="modal-header">
@@ -931,14 +1097,26 @@ body.has-custom-background .floating-actions{
 
   <div class="toast hidden" id="toast"></div>
   
-<script>(function(){try{const k="__p";localStorage.setItem(k,"1");localStorage.removeItem(k);}catch(e){let m=Object.create(null);Object.defineProperty(window,"localStorage",{configurable:true,value:{getItem(k){k=String(k);return Object.prototype.hasOwnProperty.call(m,k)?m[k]:null},setItem(k,v){m[String(k)]=String(v)},removeItem(k){delete m[String(k)]},clear(){m=Object.create(null)},key(i){return Object.keys(m)[i]??null},get length(){return Object.keys(m).length}}})}})();</script>
+
+
+<script>
+(function(){
+  try{const p='__p__';localStorage.setItem(p,'1');localStorage.removeItem(p);}
+  catch(e){let mem={};Object.defineProperty(window,'localStorage',{configurable:true,value:{
+    getItem:k=>Object.prototype.hasOwnProperty.call(mem,String(k))?mem[String(k)]:null,
+    setItem:(k,v)=>mem[String(k)]=String(v),removeItem:k=>delete mem[String(k)],
+    clear:()=>mem={},key:i=>Object.keys(mem)[i]??null,get length(){return Object.keys(mem).length;}
+  }});}
+})();
+</script>
+
 <script>
 localStorage.setItem('roster_google_client_id',"720414757752-demo.apps.googleusercontent.com");
-localStorage.setItem('roster_appdata_cache_v42',"{\"schemaVersion\": 2, \"googleClientId\": \"720414757752-demo.apps.googleusercontent.com\", \"calendarId\": \"demo@group.calendar.google.com\", \"appleIcsUrl\": \"https://calendar.google.com/calendar/ical/DEMO/basic.ics\", \"typeColors\": {\"morning\": \"#64748b\", \"afternoon\": \"#a16207\", \"evening\": \"#475569\", \"support\": \"#0f766e\", \"health\": \"#7c3aed\", \"midmonth\": \"#b45309\", \"vaccine\": \"#0369a1\", \"other\": \"#6b7280\"}, \"shiftTypes\": {\"morning\": \"\u65e9\u8a3a\", \"afternoon\": \"\u5348\u8a3a\", \"evening\": \"\u665a\u8a3a\", \"support\": \"\u652f\u63f4\", \"health\": \"\u5065\u6aa2\", \"midmonth\": \"\u6708\u4e2d\", \"vaccine\": \"\u75ab\u82d7\", \"other\": \"\u5176\u4ed6\"}, \"appearance\": {\"backgroundImage\": \"\"}, \"incomeSettings\": {\"2026-09\": {\"license\": 30000, \"support\": 8000, \"insurance\": 3500}}}");
-localStorage.setItem('roster_cache_demo@group.calendar.google.com',"[{\"id\": \"d1\", \"title\": \"\u611b\u6797\u8a3a\u6240 \u65e9\u8a3a\", \"location\": \"\u611b\u6797\u8a3a\u6240\", \"date\": \"2026-09-26\", \"type\": \"morning\", \"start\": \"09:00\", \"end\": \"12:00\", \"fee\": 6500, \"ppf\": 1000, \"customType\": \"\", \"session\": \"\u65e9\u8a3a\", \"note\": \"\"}, {\"id\": \"d2\", \"title\": \"\u611b\u6797\u8606\u6d32 \u665a\u8a3a\", \"location\": \"\u611b\u6797\u8606\u6d32\", \"date\": \"2026-09-26\", \"type\": \"evening\", \"start\": \"18:00\", \"end\": \"21:00\", \"fee\": 7000, \"ppf\": 1500, \"customType\": \"\", \"session\": \"\u665a\u8a3a\", \"note\": \"\"}, {\"id\": \"d3\", \"title\": \"\u611b\u6797\u8a3a\u6240 \u5065\u6aa2\", \"location\": \"\u611b\u6797\u8a3a\u6240\", \"date\": \"2026-09-28\", \"type\": \"health\", \"start\": \"08:30\", \"end\": \"11:30\", \"fee\": 5500, \"ppf\": 0, \"customType\": \"\", \"session\": \"\u5065\u6aa2\", \"note\": \"\"}, {\"id\": \"d4\", \"title\": \"\u611b\u6797\u8606\u6d32 \u5348\u8a3a\", \"location\": \"\u611b\u6797\u8606\u6d32\", \"date\": \"2026-09-29\", \"type\": \"afternoon\", \"start\": \"14:00\", \"end\": \"17:00\", \"fee\": 6500, \"ppf\": 900, \"customType\": \"\", \"session\": \"\u5348\u8a3a\", \"note\": \"\"}]");
+localStorage.setItem('roster_appdata_cache_v42',"{\"schemaVersion\": 2, \"googleClientId\": \"720414757752-demo.apps.googleusercontent.com\", \"calendarId\": \"demo@group.calendar.google.com\", \"appleIcsUrl\": \"https://calendar.google.com/calendar/ical/DEMO/basic.ics\", \"typeColors\": {\"morning\": \"#64748b\", \"afternoon\": \"#a16207\", \"evening\": \"#475569\", \"support\": \"#0f766e\", \"health\": \"#7c3aed\", \"midmonth\": \"#b45309\", \"vaccine\": \"#0369a1\", \"other\": \"#6b7280\"}, \"shiftTypes\": {\"morning\": \"\u65e9\u8a3a\", \"afternoon\": \"\u5348\u8a3a\", \"evening\": \"\u665a\u8a3a\", \"support\": \"\u652f\u63f4\", \"health\": \"\u5065\u6aa2\", \"midmonth\": \"\u6708\u4e2d\", \"vaccine\": \"\u75ab\u82d7\", \"other\": \"\u5176\u4ed6\"}, \"appearance\": {\"backgroundImage\": \"\"}, \"incomeSettings\": {\"2026-08\": {\"license\": 25000, \"support\": 4000, \"insurance\": 3200}, \"2026-09\": {\"license\": 30000, \"support\": 6000, \"insurance\": 3400}, \"2026-10\": {\"license\": 30000, \"support\": 8000, \"insurance\": 3500}}}");
+localStorage.setItem('roster_cache_demo@group.calendar.google.com',"[{\"id\": \"d1\", \"title\": \"\u611b\u6797\u8a3a\u6240 \u65e9\u8a3a\", \"location\": \"\u611b\u6797\u8a3a\u6240\", \"date\": \"2026-10-02\", \"type\": \"morning\", \"start\": \"09:00\", \"end\": \"12:00\", \"fee\": 6500, \"ppf\": 1000, \"customType\": \"\", \"session\": \"\u65e9\u8a3a\", \"note\": \"\"}, {\"id\": \"d2\", \"title\": \"\u611b\u6797\u8606\u6d32 \u665a\u8a3a\", \"location\": \"\u611b\u6797\u8606\u6d32\", \"date\": \"2026-10-02\", \"type\": \"evening\", \"start\": \"18:00\", \"end\": \"21:00\", \"fee\": 7000, \"ppf\": 1500, \"customType\": \"\", \"session\": \"\u665a\u8a3a\", \"note\": \"\"}, {\"id\": \"d3\", \"title\": \"\u611b\u6797\u8a3a\u6240 \u65e9\u8a3a\", \"location\": \"\u611b\u6797\u8a3a\u6240\", \"date\": \"2026-10-05\", \"type\": \"morning\", \"start\": \"09:00\", \"end\": \"12:00\", \"fee\": 6500, \"ppf\": 900, \"customType\": \"\", \"session\": \"\u65e9\u8a3a\", \"note\": \"\"}, {\"id\": \"d4\", \"title\": \"\u5065\u6aa2\", \"location\": \"\u611b\u6797\u8a3a\u6240\", \"date\": \"2026-10-07\", \"type\": \"health\", \"start\": \"08:30\", \"end\": \"11:30\", \"fee\": 5500, \"ppf\": 0, \"customType\": \"\", \"session\": \"\u5065\u6aa2\", \"note\": \"\"}, {\"id\": \"d5\", \"title\": \"\u611b\u6797\u8606\u6d32 \u665a\u8a3a\", \"location\": \"\u611b\u6797\u8606\u6d32\", \"date\": \"2026-09-28\", \"type\": \"evening\", \"start\": \"18:00\", \"end\": \"21:00\", \"fee\": 7000, \"ppf\": 1300, \"customType\": \"\", \"session\": \"\u665a\u8a3a\", \"note\": \"\"}, {\"id\": \"d6\", \"title\": \"\u75ab\u82d7\u9580\u8a3a\", \"location\": \"\u611b\u6797\u8a3a\u6240\", \"date\": \"2026-08-21\", \"type\": \"vaccine\", \"start\": \"14:00\", \"end\": \"17:00\", \"fee\": 6000, \"ppf\": 800, \"customType\": \"\", \"session\": \"\u75ab\u82d7\", \"note\": \"\"}]");
 localStorage.setItem('roster_pin_verifier_v46',"{\"algorithm\": \"PREVIEW\", \"salt\": \"preview\", \"hash\": \"preview\", \"iterations\": 1}");
 </script>
-<script>window.ROSTER_VERSION = '4.8.1';
+<script>window.ROSTER_VERSION = '4.9';
 const $ = (id) => document.getElementById(id);
 const TZ = 'Asia/Taipei';
 const WEEKDAYS = ['週日','週一','週二','週三','週四','週五','週六'];
@@ -1321,6 +1499,110 @@ function monthShifts() {
   const key = monthKey();
   return state.shifts.filter(s => s.date.startsWith(key));
 }
+
+function minutesBetween(start,end){
+  const [sh,sm]=String(start||'00:00').split(':').map(Number);
+  const [eh,em]=String(end||'00:00').split(':').map(Number);
+  let mins=(eh*60+em)-(sh*60+sm);
+  if(mins<0) mins+=24*60;
+  return Math.max(0,mins);
+}
+function monthShiftsForKey(key){
+  return state.shifts.filter(s=>String(s.date||'').slice(0,7)===key);
+}
+function monthlyIncomeForKey(key){
+  const shifts=monthShiftsForKey(key);
+  const settings=getIncomeSettings(key);
+  const fees=shifts.reduce((sum,s)=>sum+toNum(s.fee),0);
+  const ppf=shifts.reduce((sum,s)=>sum+toNum(s.ppf),0);
+  return {
+    key, shifts, settings, fees, ppf,
+    total: toNum(settings.license)+fees+ppf+toNum(settings.support)-toNum(settings.insurance)
+  };
+}
+function renderIncomeStatistics(){
+  const key=monthKey();
+  const data=monthlyIncomeForKey(key);
+  const [year,month]=key.split('-');
+  $('incomeStatsTitle').textContent=`${year} 年 ${Number(month)} 月收入統計`;
+
+  const uniqueDays=new Set(data.shifts.map(s=>s.date).filter(Boolean)).size;
+  const totalMinutes=data.shifts.reduce((sum,s)=>sum+minutesBetween(s.start,s.end),0);
+  $('statWorkDays').textContent=`${uniqueDays} 天`;
+  $('statShiftCount').textContent=`${data.shifts.length} 節`;
+  $('statWorkHours').textContent=`${(totalMinutes/60).toFixed(totalMinutes%60?1:0)} 小時`;
+  $('statAvgDaily').textContent=uniqueDays?money(Math.round(data.total/uniqueDays)):money(0);
+
+  const groups=new Map();
+  data.shifts.forEach(s=>{
+    const fee=toNum(s.fee);
+    groups.set(fee,(groups.get(fee)||0)+1);
+  });
+  const feeGroups=[...groups.entries()].sort((a,b)=>b[0]-a[0]);
+  $('statFeeSummary').textContent=feeGroups.length?`${feeGroups.length} 種節費`:'本月無排班';
+  $('feeDistribution').innerHTML=feeGroups.length?feeGroups.map(([fee,count])=>{
+    const pct=data.shifts.length?count/data.shifts.length*100:0;
+    return `<div class="fee-dist-row">
+      <div class="fee-dist-label"><strong>${money(fee)}</strong><span>${count} 節 · ${pct.toFixed(1)}%</span></div>
+      <div class="stat-bar"><i style="width:${Math.max(2,pct)}%"></i></div>
+    </div>`;
+  }).join(''):'<div class="empty-state compact-empty">本月尚無排班資料</div>';
+
+  const positiveItems=[
+    ['牌費',toNum(data.settings.license)],
+    ['節費',data.fees],
+    ['PPF',data.ppf],
+    ['額外支援',toNum(data.settings.support)]
+  ];
+  const positiveTotal=positiveItems.reduce((s,[,v])=>s+Math.max(0,v),0);
+  const insurance=toNum(data.settings.insurance);
+  $('incomeRatioList').innerHTML=[
+    ...positiveItems.map(([label,value])=>{
+      const pct=positiveTotal?value/positiveTotal*100:0;
+      return `<div class="ratio-row"><div class="ratio-label"><span>${label}</span><strong>${money(value)} · ${pct.toFixed(1)}%</strong></div><div class="stat-bar"><i style="width:${Math.max(value?2:0,pct)}%"></i></div></div>`;
+    }),
+    `<div class="ratio-row cost"><div class="ratio-label"><span>健保費用（扣除）</span><strong>− ${money(insurance)}</strong></div><div class="stat-bar"><i style="width:${positiveTotal?Math.min(100,insurance/positiveTotal*100):0}%"></i></div></div>`
+  ].join('');
+
+  renderIncomeHistoryChart();
+}
+function renderIncomeHistoryChart(){
+  const shiftMonths=state.shifts.map(s=>String(s.date||'').slice(0,7)).filter(k=>/^\d{4}-\d{2}$/.test(k));
+  const settingMonths=Object.keys(state.cloudConfig?.incomeSettings||{}).filter(k=>/^\d{4}-\d{2}$/.test(k));
+  const months=[...new Set([...shiftMonths,...settingMonths])].sort();
+  const svg=$('incomeHistoryChart');
+  const legend=$('incomeHistoryLegend');
+  if(!months.length){
+    svg.innerHTML='<text x="360" y="130" text-anchor="middle" class="chart-empty">尚無歷月資料</text>';
+    legend.innerHTML='';
+    return;
+  }
+  const values=months.map(k=>monthlyIncomeForKey(k).total);
+  const max=Math.max(1,...values);
+  const min=Math.min(0,...values);
+  const W=720,H=260,padL=58,padR=22,padT=20,padB=44;
+  const chartW=W-padL-padR,chartH=H-padT-padB;
+  const y=v=>padT+(max-v)/(max-min||1)*chartH;
+  const x=i=>months.length===1?padL+chartW/2:padL+i*(chartW/(months.length-1));
+  const grid=[];
+  for(let i=0;i<=4;i++){
+    const val=max-(max-min)*i/4, yy=padT+chartH*i/4;
+    grid.push(`<line x1="${padL}" y1="${yy}" x2="${W-padR}" y2="${yy}" class="chart-grid"/><text x="${padL-8}" y="${yy+4}" text-anchor="end" class="chart-axis">${Math.round(val/1000)}k</text>`);
+  }
+  const pts=values.map((v,i)=>`${x(i)},${y(v)}`).join(' ');
+  const labels=months.map((m,i)=>{
+    const short=m.replace('-','/');
+    return `<text x="${x(i)}" y="${H-18}" text-anchor="middle" class="chart-axis">${short}</text>`;
+  }).join('');
+  const dots=values.map((v,i)=>`<circle cx="${x(i)}" cy="${y(v)}" r="4.5" class="chart-dot"><title>${months[i]} ${money(v)}</title></circle>`).join('');
+  svg.innerHTML=`${grid.join('')}<polyline points="${pts}" class="chart-line"/>${dots}${labels}`;
+  legend.innerHTML=months.map((m,i)=>`<span><b>${m.replace('-','/')}</b>${money(values[i])}</span>`).join('');
+}
+function openIncomeStatistics(){
+  renderIncomeStatistics();
+  openModal('incomeStatsModal');
+}
+
 function renderIncome() {
   const key = monthKey();
   const [year, month] = key.split('-').map(Number);
@@ -2077,7 +2359,8 @@ function animateMonthChange(direction, updateCursor) {
 $('prevMonth').onclick=()=>animateMonthChange('prev',()=>{state.cursor=new Date(state.cursor.getFullYear(),state.cursor.getMonth()-1,1);});
 $('nextMonth').onclick=()=>animateMonthChange('next',()=>{state.cursor=new Date(state.cursor.getFullYear(),state.cursor.getMonth()+1,1);});
 $('todayBtn').onclick=()=>animateMonthChange(state.cursor > new Date() ? 'prev' : 'next',()=>{state.cursor=new Date();});
-$('addShiftBtn').onclick=()=>openShiftModal(); $('bulkShiftBtn').onclick=openBulkModal; $('incomeSettingsBtn').onclick=openIncomeModal;
+$('addShiftBtn').onclick=()=>openShiftModal(); $('bulkShiftBtn').onclick=openBulkModal; $('incomeStatsBtn').onclick=openIncomeStatistics;
+$('incomeSettingsBtn').onclick=openIncomeModal;
 $('refreshBtn').onclick=()=>withGoogleAccess(async()=>{await tryLoadAppDataConfig({force:true});await fetchAllEvents({refreshCloud:false});});
 $('googleSyncBtn').onclick=()=>withGoogleAccess(async()=>{
   $('syncStatus').textContent='正在同步 Google Calendar…';
@@ -2112,6 +2395,45 @@ document.querySelectorAll('input[name="bulkWeekday"]').forEach(el=>el.addEventLi
 ['bulkRangePreset','bulkFromInput','bulkToInput'].forEach(id=>$(id).addEventListener('change',updateBulkPreview));
 ['licenseFeeInput','supportIncomeInput','insuranceCostInput'].forEach(id=>$(id).addEventListener('input',updateIncomeEquation));
 $('typeInput').addEventListener('change',()=>syncTypeUi('')); $('bulkTypeInput').addEventListener('change',()=>syncTypeUi('bulk'));
+
+
+function requestSettingsAccess(){
+  const verifier=getLocalPinVerifier();
+  if(!verifier){
+    showToast('找不到 PIN 驗證資料，請重新載入頁面');
+    return;
+  }
+  $('settingsPinInput').value='';
+  pinSetError('settingsPinError','');
+  openModal('settingsPinModal');
+  setTimeout(()=>$('settingsPinInput')?.focus(),80);
+}
+async function submitSettingsPin(event){
+  event.preventDefault();
+  const pin=$('settingsPinInput').value.trim();
+  const verifier=getLocalPinVerifier();
+  if(!validPin(pin)){
+    pinSetError('settingsPinError','請輸入 4–8 位數字 PIN。');
+    return;
+  }
+  const button=event.submitter||$('settingsPinForm').querySelector('button[type="submit"]');
+  button.disabled=true; button.textContent='驗證中…';
+  try{
+    const ok=await verifyPin(pin,verifier);
+    if(!ok){
+      pinSetError('settingsPinError','PIN 不正確。');
+      $('settingsPinInput').select();
+      return;
+    }
+    pinSetError('settingsPinError','');
+    closeModal('settingsPinModal');
+    setTimeout(openSettings,170);
+  }catch(err){
+    pinSetError('settingsPinError',`PIN 驗證失敗：${err.message}`);
+  }finally{
+    button.disabled=false; button.textContent='進入設定';
+  }
+}
 
 function openSettings() {
   const c=state.cloudConfig||localMigrationConfig();
@@ -2158,7 +2480,7 @@ if (floatingActions) {
   });
 }
 
-$('settingsBtn').onclick=openSettings;
+$('settingsBtn').onclick=requestSettingsAccess;
 $('saveSettingsBtn').onclick=()=>{
   const clientId=$('googleClientId').value.trim();
   if(!clientId){showToast('請輸入 Google OAuth Client ID');return;}
@@ -2205,6 +2527,7 @@ $('saveSettingsBtn').onclick=()=>{
   },{forceConsent:oldClient!==clientId});
 };
 
+$('settingsPinForm')?.addEventListener('submit', submitSettingsPin);
 $('addTypeBtn').onclick=()=>{
   const label=$('newTypeName').value.trim();
   if(!label){showToast('請輸入診次種類名稱');return;}
@@ -2284,25 +2607,39 @@ wirePinGate();
 initPinGate();
 </script>
 <script>
-window.verifyPin=async function(pin){return String(pin)==='2468';};
 try{
- state.cursor=new Date(2026,8,1); state.cloudLoaded=true; setAppDataStatus('ready','預覽模式：Drive App Data 已同步'); setHeaderSyncIndicator('cloud','Google 已同步'); $('syncStatus').textContent='預覽模式 · Google Calendar 已同步 · 4 筆排班'; renderAll();
- const note=document.createElement('div'); note.className='pin-preview-note'; note.textContent='預覽 PIN：2468'; document.querySelector('.pin-card')?.appendChild(note);
- // network buttons -> local visible feedback
- $('googleSyncBtn').onclick=(e)=>{e.preventDefault();setHeaderSyncIndicator('cloud','Google 已同步');showToast('預覽：Google 同步按鈕正常');};
- $('refreshBtn').onclick=(e)=>{e.preventDefault();showToast('預覽：重新整理正常');};
- $('appleSubscribeBtn').onclick=(e)=>{e.preventDefault();showToast('預覽：Apple 訂閱正常');};
- $('retryAppDataBtn').onclick=(e)=>{e.preventDefault();showToast('預覽：App Data 載入正常');};
- $('reauthDriveBtn').onclick=(e)=>{e.preventDefault();showToast('預覽：重新授權正常');};
- // prevent real network on settings save, but test UI/data
- $('saveSettingsBtn').addEventListener('click',(e)=>{e.preventDefault();e.stopImmediatePropagation(); const t=collectTypeSettings(); state.shiftTypes=t.shiftTypes;state.typeColors=t.typeColors; state.cloudConfig={...state.cloudConfig,shiftTypes:t.shiftTypes,typeColors:t.typeColors,appearance:{backgroundImage:state.pendingBackgroundImage||''}}; applyBackground(state.pendingBackgroundImage||''); populateTypeSelects(); closeModal('settingsModal');renderAll();showToast('預覽：設定已儲存');},true);
- // local single shift save
- $('shiftForm').addEventListener('submit',(e)=>{e.preventDefault();e.stopImmediatePropagation(); const id=$('shiftId').value||('p'+Date.now()); const s={id,title:$('titleInput').value.trim()||'示範班別',location:$('locationInput').value.trim(),date:$('dateInput').value,type:$('typeInput').value,start:$('startInput').value,end:$('endInput').value,fee:toNum($('feeInput').value),ppf:toNum($('shiftPpfInput').value),customType:$('typeInput').value==='other'?$('customTypeInput').value.trim():'',session:getShiftTypes()[$('typeInput').value]||'',note:$('noteInput').value.trim()}; const i=state.shifts.findIndex(x=>x.id===id); if(i>=0)state.shifts[i]=s; else state.shifts.push(s); closeModal('shiftModal');renderAll();showToast('預覽：班表已儲存');},true);
- $('deleteShiftBtn').addEventListener('click',(e)=>{e.preventDefault();e.stopImmediatePropagation();const id=$('shiftId').value;if(id)state.shifts=state.shifts.filter(s=>s.id!==id);closeModal('shiftModal');renderAll();showToast('預覽：班表已刪除');},true);
- $('bulkForm').addEventListener('submit',(e)=>{e.preventDefault();e.stopImmediatePropagation();closeModal('bulkModal');showToast('預覽：固定排班按鈕正常');},true);
- $('incomeForm').addEventListener('submit',(e)=>{e.preventDefault();e.stopImmediatePropagation();closeModal('incomeModal');showToast('預覽：收入設定已儲存');},true);
- deleteSelectedShifts=function(){const ids=[...state.selectedShiftIds];state.shifts=state.shifts.filter(s=>!state.selectedShiftIds.has(s.id));state.selectedShiftIds.clear();state.batchDeleteMode=false;document.body.classList.remove('batch-delete-mode');renderAll();updateBatchDeleteButton();showToast(`預覽：已刪除 ${ids.length} 筆`);};
+  verifyPin=async function(pin){return String(pin)==='2468';};
+  state.cursor=new Date(2026,9,1);
+  state.cloudLoaded=true;
+  setAppDataStatus('ready','預覽模式：Drive App Data 已同步');
+  setHeaderSyncIndicator('cloud','Google 已同步');
+  $('syncStatus').textContent='預覽模式 · Google Calendar 已同步 · App Data 已同步';
+  renderAll();
+
+  // Network-only actions become local preview responses.
+  $('googleSyncBtn').onclick=e=>{e.preventDefault();showToast('預覽：Google Calendar 同步按鈕正常');};
+  $('refreshBtn').onclick=e=>{e.preventDefault();showToast('預覽：重新整理按鈕正常');};
+  $('appleSubscribeBtn').onclick=e=>{e.preventDefault();showToast('預覽：Apple Calendar 按鈕正常');};
+  $('retryAppDataBtn').onclick=e=>{e.preventDefault();showToast('預覽：App Data 按鈕正常');};
+  $('reauthDriveBtn').onclick=e=>{e.preventDefault();showToast('預覽：重新授權按鈕正常');};
+
+  // Preview settings PIN uses 2468 too.
+  submitSettingsPin=async function(event){
+    event.preventDefault();
+    if($('settingsPinInput').value.trim()!=='2468'){pinSetError('settingsPinError','PIN 不正確。');return;}
+    closeModal('settingsPinModal');setTimeout(openSettings,80);
+  };
+  const oldSettingsForm=$('settingsPinForm');
+  const clone=oldSettingsForm.cloneNode(true);
+  oldSettingsForm.replaceWith(clone);
+  clone.addEventListener('submit',submitSettingsPin);
+
+  // local form demonstrations
+  $('shiftForm').addEventListener('submit',e=>{e.preventDefault();e.stopImmediatePropagation();closeModal('shiftModal');showToast('預覽：班表儲存正常');},true);
+  $('bulkForm').addEventListener('submit',e=>{e.preventDefault();e.stopImmediatePropagation();closeModal('bulkModal');showToast('預覽：固定排班建立正常');},true);
+  $('incomeForm').addEventListener('submit',e=>{e.preventDefault();e.stopImmediatePropagation();closeModal('incomeModal');showToast('預覽：收入設定儲存正常');},true);
+  $('saveSettingsBtn').addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();closeModal('settingsModal');showToast('預覽：設定儲存正常');},true);
 }catch(e){console.error(e);document.body.dataset.previewError=e.message;}
 </script>
-<style>.pin-preview-note{margin-top:12px;padding:8px 10px;border-radius:10px;background:#f3f3f0;color:#555751;text-align:center;font-size:11px;font-weight:800}</style></body>
+</body>
 </html>

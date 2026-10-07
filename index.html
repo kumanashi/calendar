@@ -2,16 +2,16 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#f3f3f1" />
   <meta name="description" content="個人排班日曆：GitHub Pages + Google Calendar + Drive App Data 同步" />
   <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
   <meta name="googlebot" content="noindex, nofollow, nosnippet, noimageindex" />
   <meta name="bingbot" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
   <meta name="referrer" content="no-referrer" />
-  <meta name="roster-build" content="4.8.1" />
+  <meta name="roster-build" content="4.9" />
   <title>個人排班表</title>
-  <link rel="stylesheet" href="./styles.css?v=4.8.1" />
+  <link rel="stylesheet" href="./styles.css?v=4.9" />
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body class="app-locked">
@@ -62,7 +62,7 @@
   <div class="app-shell">
     <header class="topbar">
       <div>
-<div class="title-row"><h1>個人排班表</h1><span class="version-badge">v4.8.1</span><span class="sync-indicator local" id="syncIndicator" title="本機快取" aria-label="本機快取"><span class="sync-indicator-icon" aria-hidden="true"></span></span></div>
+<div class="title-row"><h1>個人排班表</h1><span class="version-badge">v4.9</span><span class="sync-indicator local" id="syncIndicator" title="本機快取" aria-label="本機快取"><span class="sync-indicator-icon" aria-hidden="true"></span></span></div>
         <p class="subtle">排班、設定與每月收入預估</p>
       </div>
 
@@ -104,7 +104,10 @@
             <p class="eyebrow">ESTIMATED INCOME</p>
             <h2 id="incomeTitle">本月預估收入</h2>
           </div>
-          <button class="btn ghost compact" id="incomeSettingsBtn" type="button">設定本月收入項目</button>
+          <div class="income-heading-actions">
+            <button class="btn ghost compact" id="incomeStatsBtn" type="button">收入統計</button>
+            <button class="btn ghost compact" id="incomeSettingsBtn" type="button">設定本月收入項目</button>
+          </div>
         </div>
         <div class="income-summary">
           <div class="income-main">
@@ -317,6 +320,76 @@
     </form>
   </div>
 
+
+
+  <div class="modal-backdrop hidden" id="incomeStatsModal">
+    <div class="modal wide stats-modal">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">INCOME STATISTICS</p>
+          <h2 id="incomeStatsTitle">收入統計</h2>
+        </div>
+        <button class="icon-btn" type="button" data-close="incomeStatsModal">×</button>
+      </div>
+
+      <div class="stats-kpis">
+        <div class="stat-kpi"><span>實際上班天數</span><strong id="statWorkDays">0 天</strong></div>
+        <div class="stat-kpi"><span>總班數</span><strong id="statShiftCount">0 節</strong></div>
+        <div class="stat-kpi"><span>總時數</span><strong id="statWorkHours">0 小時</strong></div>
+        <div class="stat-kpi"><span>平均每工作日</span><strong id="statAvgDaily">NT$ 0</strong></div>
+      </div>
+
+      <section class="stats-section">
+        <div class="stats-section-head">
+          <h3>節費分布</h3>
+          <span id="statFeeSummary"></span>
+        </div>
+        <div class="fee-distribution" id="feeDistribution"></div>
+      </section>
+
+      <section class="stats-section">
+        <h3>收入項目比例</h3>
+        <div class="income-ratio-list" id="incomeRatioList"></div>
+      </section>
+
+      <section class="stats-section">
+        <div class="stats-section-head">
+          <h3>歷月預估收入</h3>
+          <span>依目前已同步的排班與每月收入設定計算</span>
+        </div>
+        <div class="income-chart-wrap">
+          <svg id="incomeHistoryChart" class="income-history-chart" viewBox="0 0 720 260" role="img" aria-label="歷月預估收入折線圖"></svg>
+        </div>
+        <div class="chart-legend" id="incomeHistoryLegend"></div>
+      </section>
+
+      <div class="modal-actions">
+        <div class="spacer"></div>
+        <button class="btn dark" type="button" data-close="incomeStatsModal">關閉</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="settingsPinModal">
+    <form class="modal compact-modal" id="settingsPinForm" autocomplete="off">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">SECURITY</p>
+          <h2>輸入 PIN</h2>
+        </div>
+        <button class="icon-btn" type="button" data-close="settingsPinModal">×</button>
+      </div>
+      <input id="settingsPinInput" type="password" inputmode="numeric" pattern="[0-9]*"
+             maxlength="8" autocomplete="off" placeholder="PIN" aria-label="PIN" />
+      <p class="pin-error hidden" id="settingsPinError"></p>
+      <div class="modal-actions">
+        <div class="spacer"></div>
+        <button class="btn ghost" type="button" data-close="settingsPinModal">取消</button>
+        <button class="btn dark" type="submit">進入設定</button>
+      </div>
+    </form>
+  </div>
+
   <div class="modal-backdrop hidden" id="settingsModal">
     <div class="modal settings-modal">
       <div class="modal-header">
@@ -394,6 +467,6 @@
   <datalist id="locationSuggestions"></datalist>
 
   <div class="toast hidden" id="toast"></div>
-  <script src="./app.js?v=4.8.1"></script>
+  <script src="./app.js?v=4.9"></script>
 </body>
 </html>

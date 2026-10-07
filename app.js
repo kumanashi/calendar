@@ -1,4 +1,4 @@
-window.ROSTER_VERSION = '4.8.1';
+window.ROSTER_VERSION = '4.9';
 const $ = (id) => document.getElementById(id);
 const TZ = 'Asia/Taipei';
 const WEEKDAYS = ['週日','週一','週二','週三','週四','週五','週六'];
@@ -381,6 +381,110 @@ function monthShifts() {
   const key = monthKey();
   return state.shifts.filter(s => s.date.startsWith(key));
 }
+
+function minutesBetween(start,end){
+  const [sh,sm]=String(start||'00:00').split(':').map(Number);
+  const [eh,em]=String(end||'00:00').split(':').map(Number);
+  let mins=(eh*60+em)-(sh*60+sm);
+  if(mins<0) mins+=24*60;
+  return Math.max(0,mins);
+}
+function monthShiftsForKey(key){
+  return state.shifts.filter(s=>String(s.date||'').slice(0,7)===key);
+}
+function monthlyIncomeForKey(key){
+  const shifts=monthShiftsForKey(key);
+  const settings=getIncomeSettings(key);
+  const fees=shifts.reduce((sum,s)=>sum+toNum(s.fee),0);
+  const ppf=shifts.reduce((sum,s)=>sum+toNum(s.ppf),0);
+  return {
+    key, shifts, settings, fees, ppf,
+    total: toNum(settings.license)+fees+ppf+toNum(settings.support)-toNum(settings.insurance)
+  };
+}
+function renderIncomeStatistics(){
+  const key=monthKey();
+  const data=monthlyIncomeForKey(key);
+  const [year,month]=key.split('-');
+  $('incomeStatsTitle').textContent=`${year} 年 ${Number(month)} 月收入統計`;
+
+  const uniqueDays=new Set(data.shifts.map(s=>s.date).filter(Boolean)).size;
+  const totalMinutes=data.shifts.reduce((sum,s)=>sum+minutesBetween(s.start,s.end),0);
+  $('statWorkDays').textContent=`${uniqueDays} 天`;
+  $('statShiftCount').textContent=`${data.shifts.length} 節`;
+  $('statWorkHours').textContent=`${(totalMinutes/60).toFixed(totalMinutes%60?1:0)} 小時`;
+  $('statAvgDaily').textContent=uniqueDays?money(Math.round(data.total/uniqueDays)):money(0);
+
+  const groups=new Map();
+  data.shifts.forEach(s=>{
+    const fee=toNum(s.fee);
+    groups.set(fee,(groups.get(fee)||0)+1);
+  });
+  const feeGroups=[...groups.entries()].sort((a,b)=>b[0]-a[0]);
+  $('statFeeSummary').textContent=feeGroups.length?`${feeGroups.length} 種節費`:'本月無排班';
+  $('feeDistribution').innerHTML=feeGroups.length?feeGroups.map(([fee,count])=>{
+    const pct=data.shifts.length?count/data.shifts.length*100:0;
+    return `<div class="fee-dist-row">
+      <div class="fee-dist-label"><strong>${money(fee)}</strong><span>${count} 節 · ${pct.toFixed(1)}%</span></div>
+      <div class="stat-bar"><i style="width:${Math.max(2,pct)}%"></i></div>
+    </div>`;
+  }).join(''):'<div class="empty-state compact-empty">本月尚無排班資料</div>';
+
+  const positiveItems=[
+    ['牌費',toNum(data.settings.license)],
+    ['節費',data.fees],
+    ['PPF',data.ppf],
+    ['額外支援',toNum(data.settings.support)]
+  ];
+  const positiveTotal=positiveItems.reduce((s,[,v])=>s+Math.max(0,v),0);
+  const insurance=toNum(data.settings.insurance);
+  $('incomeRatioList').innerHTML=[
+    ...positiveItems.map(([label,value])=>{
+      const pct=positiveTotal?value/positiveTotal*100:0;
+      return `<div class="ratio-row"><div class="ratio-label"><span>${label}</span><strong>${money(value)} · ${pct.toFixed(1)}%</strong></div><div class="stat-bar"><i style="width:${Math.max(value?2:0,pct)}%"></i></div></div>`;
+    }),
+    `<div class="ratio-row cost"><div class="ratio-label"><span>健保費用（扣除）</span><strong>− ${money(insurance)}</strong></div><div class="stat-bar"><i style="width:${positiveTotal?Math.min(100,insurance/positiveTotal*100):0}%"></i></div></div>`
+  ].join('');
+
+  renderIncomeHistoryChart();
+}
+function renderIncomeHistoryChart(){
+  const shiftMonths=state.shifts.map(s=>String(s.date||'').slice(0,7)).filter(k=>/^\d{4}-\d{2}$/.test(k));
+  const settingMonths=Object.keys(state.cloudConfig?.incomeSettings||{}).filter(k=>/^\d{4}-\d{2}$/.test(k));
+  const months=[...new Set([...shiftMonths,...settingMonths])].sort();
+  const svg=$('incomeHistoryChart');
+  const legend=$('incomeHistoryLegend');
+  if(!months.length){
+    svg.innerHTML='<text x="360" y="130" text-anchor="middle" class="chart-empty">尚無歷月資料</text>';
+    legend.innerHTML='';
+    return;
+  }
+  const values=months.map(k=>monthlyIncomeForKey(k).total);
+  const max=Math.max(1,...values);
+  const min=Math.min(0,...values);
+  const W=720,H=260,padL=58,padR=22,padT=20,padB=44;
+  const chartW=W-padL-padR,chartH=H-padT-padB;
+  const y=v=>padT+(max-v)/(max-min||1)*chartH;
+  const x=i=>months.length===1?padL+chartW/2:padL+i*(chartW/(months.length-1));
+  const grid=[];
+  for(let i=0;i<=4;i++){
+    const val=max-(max-min)*i/4, yy=padT+chartH*i/4;
+    grid.push(`<line x1="${padL}" y1="${yy}" x2="${W-padR}" y2="${yy}" class="chart-grid"/><text x="${padL-8}" y="${yy+4}" text-anchor="end" class="chart-axis">${Math.round(val/1000)}k</text>`);
+  }
+  const pts=values.map((v,i)=>`${x(i)},${y(v)}`).join(' ');
+  const labels=months.map((m,i)=>{
+    const short=m.replace('-','/');
+    return `<text x="${x(i)}" y="${H-18}" text-anchor="middle" class="chart-axis">${short}</text>`;
+  }).join('');
+  const dots=values.map((v,i)=>`<circle cx="${x(i)}" cy="${y(v)}" r="4.5" class="chart-dot"><title>${months[i]} ${money(v)}</title></circle>`).join('');
+  svg.innerHTML=`${grid.join('')}<polyline points="${pts}" class="chart-line"/>${dots}${labels}`;
+  legend.innerHTML=months.map((m,i)=>`<span><b>${m.replace('-','/')}</b>${money(values[i])}</span>`).join('');
+}
+function openIncomeStatistics(){
+  renderIncomeStatistics();
+  openModal('incomeStatsModal');
+}
+
 function renderIncome() {
   const key = monthKey();
   const [year, month] = key.split('-').map(Number);
@@ -1137,7 +1241,8 @@ function animateMonthChange(direction, updateCursor) {
 $('prevMonth').onclick=()=>animateMonthChange('prev',()=>{state.cursor=new Date(state.cursor.getFullYear(),state.cursor.getMonth()-1,1);});
 $('nextMonth').onclick=()=>animateMonthChange('next',()=>{state.cursor=new Date(state.cursor.getFullYear(),state.cursor.getMonth()+1,1);});
 $('todayBtn').onclick=()=>animateMonthChange(state.cursor > new Date() ? 'prev' : 'next',()=>{state.cursor=new Date();});
-$('addShiftBtn').onclick=()=>openShiftModal(); $('bulkShiftBtn').onclick=openBulkModal; $('incomeSettingsBtn').onclick=openIncomeModal;
+$('addShiftBtn').onclick=()=>openShiftModal(); $('bulkShiftBtn').onclick=openBulkModal; $('incomeStatsBtn').onclick=openIncomeStatistics;
+$('incomeSettingsBtn').onclick=openIncomeModal;
 $('refreshBtn').onclick=()=>withGoogleAccess(async()=>{await tryLoadAppDataConfig({force:true});await fetchAllEvents({refreshCloud:false});});
 $('googleSyncBtn').onclick=()=>withGoogleAccess(async()=>{
   $('syncStatus').textContent='正在同步 Google Calendar…';
@@ -1172,6 +1277,45 @@ document.querySelectorAll('input[name="bulkWeekday"]').forEach(el=>el.addEventLi
 ['bulkRangePreset','bulkFromInput','bulkToInput'].forEach(id=>$(id).addEventListener('change',updateBulkPreview));
 ['licenseFeeInput','supportIncomeInput','insuranceCostInput'].forEach(id=>$(id).addEventListener('input',updateIncomeEquation));
 $('typeInput').addEventListener('change',()=>syncTypeUi('')); $('bulkTypeInput').addEventListener('change',()=>syncTypeUi('bulk'));
+
+
+function requestSettingsAccess(){
+  const verifier=getLocalPinVerifier();
+  if(!verifier){
+    showToast('找不到 PIN 驗證資料，請重新載入頁面');
+    return;
+  }
+  $('settingsPinInput').value='';
+  pinSetError('settingsPinError','');
+  openModal('settingsPinModal');
+  setTimeout(()=>$('settingsPinInput')?.focus(),80);
+}
+async function submitSettingsPin(event){
+  event.preventDefault();
+  const pin=$('settingsPinInput').value.trim();
+  const verifier=getLocalPinVerifier();
+  if(!validPin(pin)){
+    pinSetError('settingsPinError','請輸入 4–8 位數字 PIN。');
+    return;
+  }
+  const button=event.submitter||$('settingsPinForm').querySelector('button[type="submit"]');
+  button.disabled=true; button.textContent='驗證中…';
+  try{
+    const ok=await verifyPin(pin,verifier);
+    if(!ok){
+      pinSetError('settingsPinError','PIN 不正確。');
+      $('settingsPinInput').select();
+      return;
+    }
+    pinSetError('settingsPinError','');
+    closeModal('settingsPinModal');
+    setTimeout(openSettings,170);
+  }catch(err){
+    pinSetError('settingsPinError',`PIN 驗證失敗：${err.message}`);
+  }finally{
+    button.disabled=false; button.textContent='進入設定';
+  }
+}
 
 function openSettings() {
   const c=state.cloudConfig||localMigrationConfig();
@@ -1218,7 +1362,7 @@ if (floatingActions) {
   });
 }
 
-$('settingsBtn').onclick=openSettings;
+$('settingsBtn').onclick=requestSettingsAccess;
 $('saveSettingsBtn').onclick=()=>{
   const clientId=$('googleClientId').value.trim();
   if(!clientId){showToast('請輸入 Google OAuth Client ID');return;}
@@ -1265,6 +1409,7 @@ $('saveSettingsBtn').onclick=()=>{
   },{forceConsent:oldClient!==clientId});
 };
 
+$('settingsPinForm')?.addEventListener('submit', submitSettingsPin);
 $('addTypeBtn').onclick=()=>{
   const label=$('newTypeName').value.trim();
   if(!label){showToast('請輸入診次種類名稱');return;}
